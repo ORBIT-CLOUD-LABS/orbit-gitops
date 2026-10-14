@@ -4,4 +4,4 @@ metadata:
   name: gitops-smoke-test
   namespace: orbit-gitops-test
 data:
-  message: "gitops-v2"
+  message: "gitops-v1"
