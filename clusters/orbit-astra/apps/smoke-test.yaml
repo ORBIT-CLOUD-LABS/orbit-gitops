@@ -7,7 +7,7 @@ spec:
   project: workloads
   source:
     repoURL: git@github.com:ORBIT-CLOUD-LABS/orbit-gitops.git
-    targetRevision: main
+    targetRevision: task/5-argocd-gitops
     path: workloads/smoke-test
     directory:
       recurse: false
