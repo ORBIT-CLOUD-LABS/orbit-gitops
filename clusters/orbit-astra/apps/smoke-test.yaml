@@ -7,7 +7,7 @@ spec:
   project: workloads
   source:
     repoURL: git@github.com:ORBIT-CLOUD-LABS/orbit-gitops.git
-    targetRevision: task/5-argocd-gitops
+    targetRevision: main
     path: workloads/smoke-test
   destination:
     server: https://kubernetes.default.svc
