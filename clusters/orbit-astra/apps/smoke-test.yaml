@@ -1,0 +1,21 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: orbit-astra-smoke-test
+  namespace: argocd
+spec:
+  project: workloads
+  source:
+    repoURL: git@github.com:ORBIT-CLOUD-LABS/orbit-gitops.git
+    targetRevision: main
+    path: workloads/smoke-test
+    directory:
+      recurse: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: orbit-gitops-test
+  syncPolicy:
+    automated:
+      enabled: false
+      prune: false
+      selfHeal: false
