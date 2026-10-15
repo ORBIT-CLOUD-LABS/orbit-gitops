@@ -128,6 +128,13 @@ root 자동 Sync도 성공했으나 기존 `orbit-issue52-test`가 새 브랜치
 이전 테스트 Application과 리소스를 삭제하지 않았다. 기존 smoke-test도 수동 정책을 유지했다.
 재시도는 설정만 확인했으며 실패 유발·재시도 소진 동작은 이번에 검증하지 않았다.
 
-머지 전 테스트 자식의 `targetRevision`을 `main`으로 되돌리고 테스트 root 연결을
-기존 `task/52-auto-sync-test`로 복구해야 한다. 현재는 후속 확인을 위해 #15 브랜치 연결을 유지한다.
+### 검증 종료와 머지 준비 (2026-10-15)
+
+테스트 root를 Ansible로 먼저 `task/52-auto-sync-test`에 복구했다.
+실행 결과는 `ok=12 changed=1 unreachable=0 failed=0`, root의 자동 Sync operation은
+Succeeded였다. 이후 Git의 테스트 자식 선언은 `targetRevision: main`으로 되돌렸다.
+Prune 비활성으로 `orbit-astra-deploy-test`는 `requiresPruning: true`로 남아
+root는 OutOfSync / Healthy다. 잔여 테스트 자식은 기존 #15 브랜치 연결을 유지하며,
+Git 선언을 main으로 되돌려도 복구된 #52 root는 이 자식 정의를 관리하지 않는다.
+후속 정리에서 잔여 Application·Deployment·Service를 명시적으로 제거한다.
 Git revert 복구와 리소스 정리는 실행하지 않았으며 후속 정리 이슈도 아직 생성하지 않았다.

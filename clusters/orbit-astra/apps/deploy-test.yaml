@@ -7,7 +7,7 @@ spec:
   project: workloads
   source:
     repoURL: git@github.com:ORBIT-CLOUD-LABS/orbit-gitops.git
-    targetRevision: task/15-deploy-test-auto-sync
+    targetRevision: main
     path: workloads/deploy-test
   destination:
     server: https://kubernetes.default.svc
