@@ -7,6 +7,12 @@
 crds:
   create: false
 
+# rbac.namespaces를 쓰지 않으면 차트(templates/rbac.yaml)가 rules·clusterRules를
+# 구분 없이 하나의 ClusterRole로 합친다. node 접근(clusterRules) 자체가 namespace가
+# 없는 리소스라 Role/RoleBinding으로 분리할 수 없기 때문에, rules(pods/pods-log/
+# namespaces)도 orbit namespace가 아니라 클러스터 전체 범위로 생성된다(helm template로 확인).
+# 아래 rules·clusterRules 구분은 "어떤 리소스 종류가 필요한지"를 문서화하기 위한 것일
+# 뿐, namespace 범위를 분리하는 효과는 없다.
 rbac:
   create: true
   rules:
