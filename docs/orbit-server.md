@@ -179,10 +179,21 @@ startup probe의 약 2분 허용 범위 안에 기동했으며 재시작은 없�
 시험 식별자는 GITOPS7-20261015T153712Z이며 같은 이름의 차량·model을 사용했다.
 파일 경로는 /firmware/GITOPS7-20261015T153712Z/1.0.0/firmware.bin,
 SHA-256은 23dea6f8d8dea47d3a0a2469ec83c868b9b22f98afdebc879fce818b620e5a0c이다.
-차량·artifact DB 행, NFS 시험 파일, Edge 캐시는 검증 후 보존했다. 임의 DB·공유 파일 삭제는 하지 않았다.
+차량·artifact DB 행, NFS 시험 파일, Edge 캐시는 최초 검증 후 보존했다가 아래 정리 절차에서 삭제했다.
 Secret은 검사 프로세스 메모리에서만 읽고, 원문이나 발급 차량 토큰을 출력·문서화하지 않았다.
 
-검증 종료 시 임시 Application과 서버 Pod는 작업 브랜치를 참조한 채 유지한다.
-main 병합 후 root가 같은 이름의 Application을 main 선언으로 갱신했는지 확인한다.
-Self Heal이 꺼져 있으므로 main 반영 전에는 자동으로 main 참조로 돌아가지 않는다.
-병합하지 않고 테스트를 종료한다면 자동 Sync·root 재생성 영향을 검토한 별도 정리 절차를 수행한다.
+### 검증 리소스 정리 — 2026-10-16 KST
+
+사용자의 테스트 정리 요청에 따라 실제 검증 후 다음을 수행했다.
+
+- main에 서버 Application이 아직 없음을 전제로 자식 자동 Sync를 중지한 뒤 임시 Application을 삭제했다. 삭제 연쇄 finalizer가 없음을 먼저 확인했다.
+- orbit-server Deployment·Service·ConfigMap·PDB를 명시적으로 삭제하고 서버 Pod 종료를 확인했다.
+- 시험 차량 id=1·external_id=GITOPS7-20261015T153712Z와 artifact id=1·model/version/hash를 조건으로 삭제했다. update_result·campaign에서 참조하지 않는 조건을 적용했다. 차량의 credential·state는 FK CASCADE로 삭제됐고 잔여 행이 0임을 확인했다.
+- NFS 시험 파일의 크기·SHA-256을 확인한 뒤 해당 파일과 빈 전용 version/model 디렉터리만 삭제했다.
+- 두 Edge에서 해당 URL의 캐시 파일만 삭제했다. 이후 worker 3대 NodePort에서 시험 경로가 모두 HTTP 404임을 확인했다.
+- Origin 1·Edge 2 Ready·재시작 0, PVC 두 개 Bound, orbit-server-secret 유지와 서버 리소스 부재를 확인했다.
+- Flyway 이력·DB 스키마, 공유 CDN·PV·PVC·Secret, 기존 CDN 시험 파일은 삭제하지 않았다. worker의 이미지 캐시도 유지한다.
+- 로컬 검사 스크립트·임시 Application·렌더링 결과·PR 작성용 임시 파일은 삭제했다.
+
+현재 테스트 서버는 실행 중이 아니다. main 병합 후 root가 Application을 새로 만들고 main의 서버 구성을 자동 배포하는지 확인한다.
+이후 브랜치 테스트를 반복할 때도 main의 Application 포함 여부를 먼저 확인해야 root에 의해 재생성되는 것을 피할 수 있다.
