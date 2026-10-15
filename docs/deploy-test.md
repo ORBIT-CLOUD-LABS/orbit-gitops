@@ -92,5 +92,42 @@ Nginx 공식 레지스트리에서 고정 digest와 linux/amd64 이미지 존재
 `kubectl apply --dry-run=server -f -`로 검증했고 모두 통과했다. 실제 리소스는 생성하지 않았다.
 `git diff --check`도 통과했다.
 
-#15의 Git 변경 자동 배포·Pod Ready·HTTP·rollout·복구·정리는
-아직 실행하지 않았으며, 위 절차는 완료 기록이 아니다. 후속 정리 이슈도 아직 생성하지 않았다.
+### 테스트 브랜치 자동 배포·재배포 (2026-10-15)
+
+대상은 ASTRA의 기존 libvirt 테스트망 `192.168.122.0/24`이며 운영 클러스터는 변경하지 않았다.
+테스트용 Ansible 작업본에서 `inventory/test.ini`, `--tags argocd_gitops`,
+`argocd_gitops_revision=task/15-deploy-test-auto-sync`로 적용했다.
+실행 결과는 `ok=12 changed=1 unreachable=0 failed=0`이며 root 연결 revision만 변경됐다.
+root와 테스트 자식 모두 `task/15-deploy-test-auto-sync`를 읽는다.
+
+| 확인 항목 | 최초 배포 v1 | 재배포 v2 |
+| --- | --- | --- |
+| Git·자식 적용 revision | `abb0a29ec0c8d9b3253f0613fd70de8663e691cf` | `4c8693741b5e4bb9f3f0bb16db7233ab17b54209` |
+| Pod template annotation | `v1` | `v2` |
+| ReplicaSet | `gitops-deploy-test-84748584b9` | `gitops-deploy-test-57dc444888` |
+| Pod | `gitops-deploy-test-84748584b9-z96zg` | `gitops-deploy-test-57dc444888-mpjv9` |
+| Pod UID | `b3a5e3bb-619d-45bd-8467-5391cdf99bc9` | `179969e4-fc0d-4210-a2b8-cf369c542448` |
+| Pod Ready | `1/1` | `1/1` |
+| Application | Synced / Healthy | Synced / Healthy |
+| Service HTTP | 200, 기본 Nginx 페이지 | 200, 기본 Nginx 페이지 |
+
+v1은 17:23:51, v2는 17:25:51 (KST)에 테스트 control-plane에서
+Service ClusterIP `10.103.154.30:80`으로 직접 요청해 확인했다.
+노드 호스트에서 Service DNS 이름은 해석되지 않아 ClusterIP로 요청했다.
+Pod 내부 DNS 동작과 port-forward 경로를 검증한 결과는 아니다.
+
+이미지는 전후 모두 `nginx:1.30.6-alpine`이며 선언 digest와 실행 imageID는
+`sha256:ff8328b4279ec385af48cde9ef486e7165ad74b7065cb3cd86c377384e2e2dd5`로 같았다.
+v2의 새 ReplicaSet은 1/1 Ready, 기존 ReplicaSet은 0/0으로 축소됐고
+`kubectl rollout status`가 성공했다. 자식 operation은 17:25:32 (KST)에
+`initiatedBy.automated: true`, `phase: Succeeded`였다.
+수동 Refresh·Sync, Deployment 직접 apply, rollout restart는 실행하지 않았다.
+
+root 자동 Sync도 성공했으나 기존 `orbit-issue52-test`가 새 브랜치에 없어
+`requiresPruning: true`로 남아 root는 OutOfSync / Healthy다. Prune 비활성 정책에 따라
+이전 테스트 Application과 리소스를 삭제하지 않았다. 기존 smoke-test도 수동 정책을 유지했다.
+재시도는 설정만 확인했으며 실패 유발·재시도 소진 동작은 이번에 검증하지 않았다.
+
+머지 전 테스트 자식의 `targetRevision`을 `main`으로 되돌리고 테스트 root 연결을
+기존 `task/52-auto-sync-test`로 복구해야 한다. 현재는 후속 확인을 위해 #15 브랜치 연결을 유지한다.
+Git revert 복구와 리소스 정리는 실행하지 않았으며 후속 정리 이슈도 아직 생성하지 않았다.
