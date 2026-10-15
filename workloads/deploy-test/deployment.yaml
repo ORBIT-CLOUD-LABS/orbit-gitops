@@ -13,7 +13,7 @@ spec:
       labels:
         app.kubernetes.io/name: gitops-deploy-test
       annotations:
-        orbit.dev/deploy-test-revision: v1
+        orbit.dev/deploy-test-revision: v2
     spec:
       containers:
         - name: nginx
