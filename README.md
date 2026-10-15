@@ -11,6 +11,7 @@ ApplicationSet은 환경·클러스터 증가로 Application 정의가 반복될
 | `platform/<addon>/` | 플랫폼 애드온 manifest 및 추가 규칙 |
 | [docs/requirements.md](docs/requirements.md) | 요구사항 원본·공통 값 참조 |
 | [docs/cdn.md](docs/cdn.md) | CDN 구성·선행 조건·검증·복구 |
+| [docs/orbit-server.md](docs/orbit-server.md) | 서버 초기 배포·검증·복구 및 HPA 후속 작업 |
 
 ## 최초 연결
 
