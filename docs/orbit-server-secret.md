@@ -70,13 +70,28 @@ kubectl get secret orbit-server-secret -n orbit -o jsonpath='{.data.ENROLLMENT_K
 ## 교체
 
 환경 변수는 파드 시작 시에만 읽으므로 Secret 을 바꾼 뒤 재시작해야 반영된다.
-생성과 같은 방식으로 값을 준비하고 `create` 대신 `apply` 로 덮어쓴다.
+`apply` 는 Secret 의 `data` 전체를 덮어쓴다. 바꾸지 않는 키도 현재 값을 읽어 함께 넘겨야 사라지지 않는다.
+재시작은 Secret 갱신이 성공했을 때만 실행되도록 `&&` 로 잇는다.
 
 ```bash
+get() { kubectl get secret orbit-server-secret -n orbit -o jsonpath="{.data.$1}" | base64 -d; }
+DB_PASSWORD=$(get DB_PASSWORD); ENROLLMENT_KEY=$(get ENROLLMENT_KEY); ADMIN_TOKEN=$(get ADMIN_TOKEN)
+
+# 바꿀 키만 다시 지정한다. 예:
+#   ADMIN_TOKEN=$(openssl rand -hex 32)
+#   ENROLLMENT_KEY=$(openssl rand -hex 32)
+#   read -rsp 'DB_PASSWORD: ' DB_PASSWORD; echo
+
 kubectl create secret generic orbit-server-secret -n orbit \
-  --from-env-file=<(printf '...') --dry-run=client -o yaml | kubectl apply -f -
-kubectl rollout restart deployment/orbit-server -n orbit
+  --from-env-file=<(printf 'DB_PASSWORD=%s\nENROLLMENT_KEY=%s\nADMIN_TOKEN=%s\n' \
+    "$DB_PASSWORD" "$ENROLLMENT_KEY" "$ADMIN_TOKEN") \
+  --dry-run=client -o yaml | kubectl apply -f - \
+  && kubectl rollout restart deployment/orbit-server -n orbit
+
+unset -f get; unset DB_PASSWORD ENROLLMENT_KEY ADMIN_TOKEN
 ```
+
+키를 다시 지정하는 줄도 생성 때와 같이 하나씩 실행한다. 붙여 넣은 블록 안의 `read` 는 다음 줄을 입력값으로 가져갈 수 있다.
 
 - `DB_PASSWORD` 는 vault 값과 Ansible 로 바꾼 DB 계정 비밀번호를 먼저 맞춘 뒤 교체한다.
 - `ENROLLMENT_KEY` 를 바꾸면 기존 키를 쓰는 차량은 새로 등록하지 못한다. 현재 서버는 키 하나만 허용하므로
