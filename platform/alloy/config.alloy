@@ -1,0 +1,161 @@
+// orbit-gitops#10: 클러스터 메트릭·로그를 모니터링 VM(192.168.100.107)의 Prometheus·Loki로 전송한다.
+// 서버 메트릭 포트(8080)·경로(/actuator/prometheus)는 orbit docs/phase1.md 공통 값 표 기준 "미확정" 값이다.
+// 확정되면 이 파일의 orbit_server 관련 블록을 갱신한다.
+
+logging {
+	level  = "info"
+	format = "logfmt"
+}
+
+// ---------- 메트릭: orbit-server Pod ----------
+
+discovery.kubernetes "orbit_server_pods" {
+	role = "pod"
+
+	namespaces {
+		names = ["orbit"]
+	}
+
+	selectors {
+		role  = "pod"
+		label = "app=orbit-server"
+	}
+}
+
+discovery.relabel "orbit_server_targets" {
+	targets = discovery.kubernetes.orbit_server_pods.targets
+
+	rule {
+		source_labels = ["__meta_kubernetes_pod_ip"]
+		target_label  = "__address__"
+		replacement   = "$1:8080"
+	}
+
+	rule {
+		source_labels = ["__meta_kubernetes_namespace"]
+		target_label  = "namespace"
+	}
+
+	rule {
+		source_labels = ["__meta_kubernetes_pod_label_app"]
+		target_label  = "app"
+	}
+
+	rule {
+		source_labels = ["__meta_kubernetes_pod_name"]
+		target_label  = "pod"
+	}
+}
+
+prometheus.scrape "orbit_server" {
+	targets         = discovery.relabel.orbit_server_targets.output
+	metrics_path    = "/actuator/prometheus"
+	scrape_interval = "30s"
+	forward_to      = [prometheus.relabel.limit_labels.receiver]
+}
+
+// ---------- 메트릭: kubelet·cAdvisor (노드) ----------
+// kubelet serving 인증서는 kubeadm 자체 서명이라 공용 CA로 검증되지 않는다.
+// 모니터링 전용 수집(클러스터 내부 접근)이라 insecure_skip_verify로 처리한다.
+// CA 배포로 전환할 경우 orbit-infrastructure 쪽에 kubelet-serving-ca ConfigMap 배포가 선행돼야 한다.
+
+discovery.kubernetes "nodes" {
+	role = "node"
+}
+
+discovery.relabel "kubelet_targets" {
+	targets = discovery.kubernetes.nodes.targets
+
+	rule {
+		source_labels = ["__meta_kubernetes_node_address_InternalIP"]
+		target_label  = "__address__"
+		replacement   = "$1:10250"
+	}
+
+	rule {
+		source_labels = ["__meta_kubernetes_node_name"]
+		target_label  = "node"
+	}
+}
+
+prometheus.scrape "kubelet_cadvisor" {
+	targets            = discovery.relabel.kubelet_targets.output
+	scheme             = "https"
+	metrics_path       = "/metrics/cadvisor"
+	bearer_token_file  = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+	scrape_interval    = "30s"
+	forward_to         = [prometheus.relabel.limit_labels.receiver]
+
+	tls_config {
+		insecure_skip_verify = true
+	}
+}
+
+// ---------- 메트릭: kube-state-metrics ----------
+// 동일 네임스페이스 Service(fixed DNS)를 고정 대상으로 scrape한다. K8s SD는 쓰지 않는다.
+
+prometheus.scrape "kube_state_metrics" {
+	targets = [{
+		__address__ = "kube-state-metrics.observability.svc.cluster.local:8080",
+	}]
+	scrape_interval = "30s"
+	forward_to      = [prometheus.relabel.limit_labels.receiver]
+}
+
+// label은 namespace·app·pod·node 수준으로 제한한다(차량 ID·토큰 등을 label로 쓰지 않음).
+// 아래 추가 label은 orbit-observability#6 대시보드가 실제로 구분해야 하는 값들이다.
+// 이게 없으면 같은 namespace의 서로 다른 시계열이 하나로 합쳐져 패널이 틀린 값을 낸다:
+//   - deployment: kube_deployment_* — orbit-server·origin·edge Deployment 3개를 구분
+//   - container, resource, unit: kube_pod_container_resource_requests/limits — CPU/메모리
+//     request·limit이 같은 시계열로 충돌하는 걸 막음 (container는 cAdvisor 다중 컨테이너 Pod 구분에도 쓰임)
+//   - phase: kube_pod_status_phase — Pod 상태별 구분
+//   - metric_name, metric_target_type, horizontalpodautoscaler: kube_horizontalpodautoscaler_* — HPA 이름과
+//     어떤 지표를 보는지 구분
+//   - condition: kube_deployment_status_condition·kube_pod_status_ready — Available/Progressing,
+//     Pod Ready 여부(true/false/unknown) 구분
+//   - area: jvm_memory_used_bytes — heap/nonheap 구분
+//   - le, method, status, outcome: http_server_requests_seconds_bucket — le 없이는
+//     histogram_quantile 자체가 불가능하고(API P95 패널), method·status·outcome 없이는 오류율을 구분할 수 없음
+prometheus.relabel "limit_labels" {
+	forward_to = [prometheus.remote_write.monitoring_vm.receiver]
+
+	rule {
+		action = "labelkeep"
+		regex  = "__name__|namespace|app|pod|node|job|instance|deployment|container|resource|unit|phase|metric_name|metric_target_type|horizontalpodautoscaler|condition|area|le|method|status|outcome"
+	}
+}
+
+prometheus.remote_write "monitoring_vm" {
+	endpoint {
+		url = "http://192.168.100.107:9090/api/v1/write"
+	}
+}
+
+// ---------- 로그: orbit namespace Pod stdout ----------
+
+discovery.kubernetes "orbit_pods" {
+	role = "pod"
+
+	namespaces {
+		names = ["orbit"]
+	}
+}
+
+loki.source.kubernetes "orbit_logs" {
+	targets    = discovery.kubernetes.orbit_pods.targets
+	forward_to = [loki.process.limit_labels.receiver]
+}
+
+loki.process "limit_labels" {
+	forward_to = [loki.write.monitoring_vm.receiver]
+
+	stage.label_keep {
+		values = ["namespace", "app", "pod", "container"]
+	}
+}
+
+loki.write "monitoring_vm" {
+	endpoint {
+		url = "http://192.168.100.107:3100/loki/api/v1/push"
+	}
+}

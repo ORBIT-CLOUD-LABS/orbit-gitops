@@ -1,0 +1,31 @@
+# orbit-gitops#10: DaemonSet(기본값)으로 각 노드에 Alloy를 배포한다.
+# platform 프로젝트 권한(orbit-infrastructure#57)이 허용하는 리소스 종류만 생성하도록
+# 차트 기본값의 CRD 설치와 과도한 RBAC 규칙(Secret·ConfigMap 조회, Prometheus Operator CRD 등)을 끈다.
+# config.alloy 내용은 clusters/orbit-astra/apps/alloy.yaml의 helm.fileParameters로
+# alloy.configMap.content에 주입한다(이 파일에는 두지 않음).
+
+crds:
+  create: false
+
+# rbac.namespaces를 쓰지 않으면 차트(templates/rbac.yaml)가 rules·clusterRules를
+# 구분 없이 하나의 ClusterRole로 합친다. node 접근(clusterRules) 자체가 namespace가
+# 없는 리소스라 Role/RoleBinding으로 분리할 수 없기 때문에, rules(pods/pods-log/
+# namespaces)도 orbit namespace가 아니라 클러스터 전체 범위로 생성된다(helm template로 확인).
+# 아래 rules·clusterRules 구분은 "어떤 리소스 종류가 필요한지"를 문서화하기 위한 것일
+# 뿐, namespace 범위를 분리하는 효과는 없다.
+rbac:
+  create: true
+  rules:
+    # discovery.kubernetes(role=pod)·loki.source.kubernetes에 필요한 최소 권한
+    - apiGroups: [""]
+      resources: ["pods", "pods/log", "namespaces"]
+      verbs: ["get", "list", "watch"]
+  clusterRules:
+    # discovery.kubernetes(role=node)에 필요한 최소 권한
+    - apiGroups: [""]
+      resources: ["nodes"]
+      verbs: ["get", "list", "watch"]
+    # kubelet/cAdvisor 메트릭 엔드포인트 접근 인가(SubjectAccessReview)에 필요
+    - apiGroups: [""]
+      resources: ["nodes/metrics"]
+      verbs: ["get"]

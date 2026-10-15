@@ -1,0 +1,7 @@
+# orbit-infrastructure#57 플랫폼 권한 범위 내로 수집 대상을 제한한다.
+# Deployment 상태·HPA 상태·Pod 상태만 필요하므로(orbit-gitops#10) 나머지 collector는 비활성화한다.
+# secrets·configmaps 등 기본 collector는 클러스터 전체를 읽으므로 불필요한 노출을 막기 위해 끈다.
+collectors:
+  - deployments
+  - horizontalpodautoscalers
+  - pods
