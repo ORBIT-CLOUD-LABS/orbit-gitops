@@ -15,6 +15,7 @@ Phase1 작업은 orbit `docs/phase1.md` 를 먼저 읽는다.
 | --- | --- |
 | 배포 구성·공통 값 확인 (항상) | [docs/requirements.md](docs/requirements.md) |
 | 디렉터리 구조, Argo CD 프로젝트, Sync 정책, 작업 규칙 | [README.md](README.md) |
+| CDN 배포·검증·복구 | [docs/cdn.md](docs/cdn.md) |
 | 플랫폼 애드온 추가 | [platform/README.md](platform/README.md) |
 | Issue·Branch·커밋·PR·리뷰 | Org 공통 [CONTRIBUTING.md](https://github.com/ORBIT-CLOUD-LABS/.github/blob/main/CONTRIBUTING.md) |
 

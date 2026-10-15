@@ -9,16 +9,18 @@ ApplicationSet은 환경·클러스터 증가로 Application 정의가 반복될
 | `clusters/orbit-astra/apps/` | root가 읽는 자식 Application 정의만 저장 |
 | `workloads/<app>/` | 업무 앱 또는 연결 검증용 manifest |
 | `platform/<addon>/` | 플랫폼 애드온 manifest 및 추가 규칙 |
+| [docs/requirements.md](docs/requirements.md) | 요구사항 원본·공통 값 참조 |
+| [docs/cdn.md](docs/cdn.md) | CDN 구성·선행 조건·검증·복구 |
 
 ## 최초 연결
 
 이 저장소의 manifest를 `main`에 반영한 뒤 infrastructure의
 [GitOps bootstrap 절차](https://github.com/ORBIT-CLOUD-LABS/orbit-infrastructure/blob/develop/docs/argocd-gitops.md)를 따른다.
-infrastructure #58의 root 자동 Sync 설정을 대상 클러스터에 적용하면
-`orbit-astra-root`가 자식 Application을 자동 생성·갱신한다. 병합만으로 클러스터의
+infrastructure #52의 root 자동 Sync 설정을 대상 클러스터에 적용하면
+`orbit-astra-root`가 자식 Application을 자동 생성·갱신한다. main 병합만으로
 root 설정이 바뀌지는 않는다. namespace·AppProject·저장소 인증은 Ansible이 먼저 준비한다.
 기존 `orbit-astra-smoke-test`는 수동 Sync해야 ConfigMap이 생성된다.
-`orbit-astra-deploy-test`는 자동 Sync로 Nginx를 배포한다.
+`orbit-astra-cdn`은 자동 Sync로 Origin·Edge와 정적 PV·PVC를 배포한다.
 
 ## 작업 규칙
 

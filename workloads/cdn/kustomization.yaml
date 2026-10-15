@@ -1,0 +1,24 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: orbit
+resources:
+  - pv.yaml
+  - pvc.yaml
+  - origin-deployment.yaml
+  - origin-service.yaml
+  - edge-deployment.yaml
+  - edge-service.yaml
+configMapGenerator:
+  - name: cdn-origin-config
+    files:
+      - default.conf=origin.conf
+  - name: cdn-edge-config
+    files:
+      - default.conf=edge.conf
+generatorOptions:
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+images:
+  - name: nginx
+    newName: docker.io/library/nginx
+    digest: sha256:ed84151ed2d47ef93c0939eb9b9754c6990db6092cd2081e11988a47a83d47ea
