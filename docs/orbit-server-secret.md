@@ -35,6 +35,9 @@ Sealed Secrets·External Secrets 같은 정식 관리 방식은 후속 Issue 에
 control plane 의 bash 에서 실행한다. 값이 셸 기록이나 프로세스 인자에 남지 않도록 `read -rs` 와
 `--from-env-file` 을 쓴다. `--from-literal` 은 쓰지 않는다.
 
+첫 줄 `read` 를 먼저 실행해 비밀번호를 입력한 뒤 나머지를 붙여 넣는다. 블록 전체를 한 번에 붙여 넣으면
+`read` 가 비밀번호 대신 다음 줄을 입력값으로 가져갈 수 있다.
+
 ```bash
 read -rsp 'DB_PASSWORD (vault_vehicle_db_password): ' DB_PASSWORD; echo
 ENROLLMENT_KEY=$(openssl rand -hex 32)
