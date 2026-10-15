@@ -12,6 +12,11 @@ spec:
     targetRevision: 3.13.1
     helm:
       releaseName: metrics-server
+      valuesObject:
+        args:
+          # kubeadm 기본 kubelet 서빙 인증서는 자체 서명이다(serverTLSBootstrap 미사용).
+          # 검증 없이 수집하며, kubelet 인증서를 CA 서명으로 바꾸면 제거한다.
+          - --kubelet-insecure-tls
   destination:
     server: https://kubernetes.default.svc
     namespace: kube-system
