@@ -15,6 +15,7 @@ Phase1 작업은 orbit `docs/phase1.md` 를 먼저 읽는다.
 | --- | --- |
 | 배포 구성·공통 값 확인 (항상) | [docs/requirements.md](docs/requirements.md) |
 | 디렉터리 구조, Argo CD 프로젝트, Sync 정책, 작업 규칙 | [README.md](README.md) |
+| CDN 배포·검증·복구 | [docs/cdn.md](docs/cdn.md) |
 | 플랫폼 애드온 추가 | [platform/README.md](platform/README.md) |
 | Issue·Branch·커밋·PR·리뷰 | Org 공통 [CONTRIBUTING.md](https://github.com/ORBIT-CLOUD-LABS/.github/blob/main/CONTRIBUTING.md) |
 
@@ -23,7 +24,7 @@ Phase1 작업은 orbit `docs/phase1.md` 를 먼저 읽는다.
 문서를 다 읽지 못했더라도 아래는 반드시 지킨다.
 
 - 자식 Application 은 `clusters/orbit-astra/apps/` 에만 두고, 업무 앱은 `workloads`, 애드온은 `platform` 프로젝트를 쓴다.
-- 자동 Sync·Prune·Self Heal 은 켜지 않는다. 전환은 CI/CD 파이프라인(orbit-server#61)에서 결정한다.
+- root 자동 Sync는 infrastructure가 관리한다. #15 및 #7~#10 자식은 README의 자동 Sync·제한된 재시도 기준을 적용한다. 기존 smoke-test는 수동 Sync를 유지한다. Prune·Self Heal은 켜지 않는다.
 - HPA 가 개수를 정하는 Deployment 에는 `replicas` 를 적지 않는다.
 - 개인키·토큰·평문 Secret 을 커밋하지 않는다. Secret 은 클러스터에 수동으로 만들고 이름만 참조한다.
 - 이미지·Helm chart 는 버전(이미지는 커밋 SHA tag 또는 digest)을 고정한다. `latest`·`phase1` 같은 이동 tag 를 배포에 쓰지 않는다.

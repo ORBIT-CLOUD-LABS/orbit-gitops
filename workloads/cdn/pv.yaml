@@ -1,0 +1,41 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: orbit-origin-nfs-ro
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes: [ReadOnlyMany]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  mountOptions: [vers=4.1, hard]
+  claimRef:
+    namespace: orbit
+    name: origin-files
+  nfs:
+    server: 192.168.100.105
+    path: /srv/nfs/origin
+    readOnly: true
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: orbit-origin-nfs-rw
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes: [ReadWriteMany]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  mountOptions: [vers=4.1, hard]
+  claimRef:
+    namespace: orbit
+    name: origin-files-rw
+  nfs:
+    server: 192.168.100.105
+    path: /srv/nfs/origin
+    readOnly: false

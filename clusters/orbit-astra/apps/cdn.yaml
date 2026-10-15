@@ -1,0 +1,25 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: orbit-astra-cdn
+  namespace: argocd
+spec:
+  project: workloads
+  source:
+    repoURL: git@github.com:ORBIT-CLOUD-LABS/orbit-gitops.git
+    targetRevision: main
+    path: workloads/cdn
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: orbit
+  syncPolicy:
+    automated:
+      enabled: true
+      prune: false
+      selfHeal: false
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
