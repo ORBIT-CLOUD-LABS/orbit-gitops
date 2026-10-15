@@ -9,6 +9,6 @@
 sourceRepos에 명시적으로 추가해야 한다.
 
 Application에는 고정 버전과 README의 자동 Sync·제한된 재시도 기준을 적용한다.
-Prune·Self Heal은 비활성화한다. CRD·컨트롤러·의존 앱의 선행 조건과 적용 순서,
-삭제 영향을 PR에 적는다. main 반영 시 배포가 시작될 수 있으므로 namespace·권한·
-Secret을 먼저 준비한다.
+Prune·Self Heal은 비활성화한다. CRD, 컨트롤러, 의존 앱의 선행 조건을 준비한 뒤
+Application을 반영하며 적용 순서와 삭제 영향도 PR에 적는다. main 반영만으로
+배포가 시작될 수 있으므로 필요한 Secret·권한·namespace를 먼저 준비한다.

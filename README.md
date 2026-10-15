@@ -36,11 +36,10 @@ root 설정이 바뀌지는 않는다. namespace·AppProject·저장소 인증�
 
 ## Sync 정책
 
-기존 smoke-test는 ConfigMap의 `message`를 `gitops-v1`에서 `gitops-v2`로 변경하면 자식이 OutOfSync가 된다.
-수동 Sync 전에는 실제 값이 v1이고, Sync 후 v2인지 확인한다. 마지막으로 v1으로 되돌려 다시 Sync한다.
-실제 클러스터 변경을 직접 수행해도 Self Heal이 꺼져 있어 자동 복구되지 않아야 한다.
-
-#15의 자식 기준에 맞춰 자동 Sync와 최대 5회 재시도를 사용한다.
+CI/CD 배포 경로 검증 #15와 후속 #7~#10의 자식 Application 기준이다.
+기존 Phase1 실험의 이미지·설정 고정 원칙은 유지하며, 부하 실험 중에는 Git 변경을 멈춘다.
+원본 `orbit/docs/phase1.md`의 수동 Sync 설명과 차이가 있으므로 원본 정책 정리는
+orbit 저장소에서 별도로 수행한다. 이 저장소에 원본을 복사하거나 직접 수정하지 않는다.
 
 ```yaml
 syncPolicy:
@@ -56,18 +55,18 @@ syncPolicy:
       maxDuration: 3m
 ```
 
-root와 자식 정책은 독립적이다. main 반영 시 배포가 시작될 수 있으므로 namespace·권한·
-Secret·의존 리소스를 먼저 준비한다. 재시도 소진 후 원인을 수정하고 새 Git revision을
-반영하거나 Prune 없는 수동 Sync로 복구한다. 일반 배포 검증은 수동 Sync 없이 수행한다.
-Self Heal 비활성 상태에서도 새 Git revision이나 수동 Sync는 직접 변경한 값을 덮어쓸 수 있다.
-배포 중지는 root는 Ansible, 자식은 이 저장소에서 자동 Sync를 비활성화한다.
-root만 중지해도 자식의 자동 Sync는 계속 동작한다.
+root와 자식의 자동 Sync는 독립적이다. main 반영 후 선행 조건이 준비되지 않은 앱도
+배포가 시작될 수 있으므로 Secret·namespace·권한·의존 리소스는 먼저 준비한다.
+재시도 소진 후에는 원인을 고쳐 새 Git revision을 반영하거나 Prune 없는 수동 Sync로 복구한다.
+롤백은 Git revert로 수정 revision을 만들고 실제 리소스 복구까지 확인한다.
 
-Prune이 꺼져 있어 Git 파일 삭제만으로 리소스가 제거되지 않는다. 삭제 연쇄 finalizer도
-추가하지 않는다. 이전 해시 ConfigMap은 현재 참조와 롤백 필요성을 확인한 뒤 별도로 정리한다.
-롤백은 Git revert로 반영하고 실제 Pod·HTTP 복구를 확인한다. PV·PVC나 NFS 파일 삭제를
-복구 절차에 포함하지 않는다.
+Self Heal 비활성화는 클러스터 직접 변경만으로 자동 복구하지 않는다는 뜻이다.
+이후 Git 변경이나 수동 Sync에서는 Git 값으로 덮어쓸 수 있다. 배포 중지는 root는
+Ansible, 자식은 이 저장소에서 자동 Sync를 비활성화한다. root만 중지해도 자식은 계속 동작한다.
 
-부하 실험 중에는 Git·이미지·설정 변경을 멈추고 측정 revision을 고정한다.
-orbit 원본 `docs/phase1.md`의 수동 Sync 설명은 #9·#15의 최신 결정과 차이가 있다.
-원본 정책 정리는 orbit에서 별도로 수행하며 요구사항 원본을 이 저장소에 복사하지 않는다.
+Prune이 꺼져 있어 Git 파일 삭제만으로 Application·배포 리소스가 제거되지 않는다.
+삭제 연쇄 finalizer도 추가하지 않는다. 정리 목록과 순서를 검토하고 명시적으로 삭제한다.
+Nginx 배포·HTTP·rollout 검증과 정리 절차는 [deploy-test.md](docs/deploy-test.md)를 따른다.
+
+기존 smoke-test는 `message` v1→v2→v1 변경과 각 단계 수동 Sync로 확인한다.
+Self Heal이 꺼져 있으므로 직접 변경만으로 자동 복구되지 않아야 한다.
