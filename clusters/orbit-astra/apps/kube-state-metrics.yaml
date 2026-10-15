@@ -1,0 +1,25 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: orbit-astra-kube-state-metrics
+  namespace: argocd
+spec:
+  project: platform
+  sources:
+    - repoURL: https://prometheus-community.github.io/helm-charts
+      chart: kube-state-metrics
+      targetRevision: 8.6.0
+      helm:
+        valueFiles:
+          - $values/platform/kube-state-metrics/values.yaml
+    - repoURL: git@github.com:ORBIT-CLOUD-LABS/orbit-gitops.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: observability
+  syncPolicy:
+    automated:
+      enabled: false
+      prune: false
+      selfHeal: false
