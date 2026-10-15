@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: origin-files
+  namespace: orbit
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  accessModes: [ReadOnlyMany]
+  storageClassName: ""
+  volumeName: orbit-origin-nfs-ro
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: origin-files-rw
+  namespace: orbit
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: ""
+  volumeName: orbit-origin-nfs-rw
+  resources:
+    requests:
+      storage: 1Gi
