@@ -109,7 +109,11 @@ prometheus.scrape "kube_state_metrics" {
 //   - container, resource, unit: kube_pod_container_resource_requests/limits — CPU/메모리
 //     request·limit이 같은 시계열로 충돌하는 걸 막음 (container는 cAdvisor 다중 컨테이너 Pod 구분에도 쓰임)
 //   - phase: kube_pod_status_phase — Pod 상태별 구분
-//   - metric_name, metric_target_type: kube_horizontalpodautoscaler_* — HPA가 어떤 지표를 보는지 구분
+//   - metric_name, metric_target_type, horizontalpodautoscaler: kube_horizontalpodautoscaler_* — HPA 이름과
+//     어떤 지표를 보는지 구분
+//   - condition: kube_deployment_status_condition·kube_pod_status_ready — Available/Progressing,
+//     Pod Ready 여부(true/false/unknown) 구분
+//   - area: jvm_memory_used_bytes — heap/nonheap 구분
 //   - le, method, status, outcome: http_server_requests_seconds_bucket — le 없이는
 //     histogram_quantile 자체가 불가능하고(API P95 패널), method·status·outcome 없이는 오류율을 구분할 수 없음
 prometheus.relabel "limit_labels" {
@@ -117,7 +121,7 @@ prometheus.relabel "limit_labels" {
 
 	rule {
 		action = "labelkeep"
-		regex  = "__name__|namespace|app|pod|node|job|instance|deployment|container|resource|unit|phase|metric_name|metric_target_type|le|method|status|outcome"
+		regex  = "__name__|namespace|app|pod|node|job|instance|deployment|container|resource|unit|phase|metric_name|metric_target_type|horizontalpodautoscaler|condition|area|le|method|status|outcome"
 	}
 }
 
