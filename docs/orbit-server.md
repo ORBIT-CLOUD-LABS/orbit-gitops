@@ -7,11 +7,14 @@
 
 ## 구현 범위
 
-- `workloads/orbit-server/`: ConfigMap, Deployment, NodePort Service, PDB, HPA, Kustomization.
+- `workloads/orbit-server/`: ConfigMap, Deployment, NodePort Service, PDB, HPA. Kustomize 없이 일반 YAML 디렉터리로 배포한다.
+  orbit-server 이미지 자동 갱신([orbit-server#70](https://github.com/ORBIT-CLOUD-LABS/orbit-server/issues/70))이
+  `deployment.yaml`의 `image`만 고치고 kustomization이 있으면 멈추므로, 이 디렉터리에는 kustomization을 두지 않는다.
+  각 manifest에 `namespace: orbit`을 직접 적는다.
 - `clusters/orbit-astra/apps/orbit-server.yaml`: Application `orbit-astra-orbit-server`.
 - HPA가 Pod 수를 최소 2·최대 4로 정하므로 Deployment에는 `replicas`를 적지 않는다.
 - HPA는 CPU 평균 사용률 70%를 목표로 하고, 확장은 안정화 30초·30초마다 1개씩이다. 축소는 기본 정책(안정화 300초)을 따른다.
-- 이미지는 `ghcr.io/orbit-cloud-labs/orbit-server:6cb87138b7b797faeed566670e180619303fafbc`로 고정한다.
+- 이미지는 전체 커밋 SHA tag로 고정한다. orbit-server phase1 머지 후 이미지 발행이 성공하면 orbit-server Actions가 이 값을 새 SHA로 갱신해 main에 커밋한다.
 - CPU request/limit은 초기값 `500m`, 메모리 request/limit은 `768Mi`, Hikari 최대 연결은 5이다.
   CPU limit과 HPA 목표 사용률은 초기값이며 [orbit#23](https://github.com/ORBIT-CLOUD-LABS/orbit/issues/23)의 부하 사전 측정으로 조정한다.
   request와 limit이 같으므로 HPA 사용률은 100%를 넘지 않는다.
@@ -56,9 +59,8 @@ Secret 관리 절차는 [orbit-server-secret.md](orbit-server-secret.md), PVC·C
 서로 다른 Application 사이의 Sync 순서는 보장되지 않으므로 CDN Application의 존재만으로 PVC 준비를 판단하지 않는다.
 
 ```bash
-kubectl kustomize workloads/orbit-server
-kubectl apply --dry-run=client -k workloads/orbit-server
-kubectl apply --dry-run=server -k workloads/orbit-server
+kubectl apply --dry-run=client -f workloads/orbit-server
+kubectl apply --dry-run=server -f workloads/orbit-server
 kubectl apply --dry-run=server -f clusters/orbit-astra/apps/orbit-server.yaml
 git diff --check
 ```
