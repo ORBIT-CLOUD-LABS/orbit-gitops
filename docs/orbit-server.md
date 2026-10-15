@@ -2,15 +2,19 @@
 
 관련 이슈: [#7](https://github.com/ORBIT-CLOUD-LABS/orbit-gitops/issues/7).
 요구사항 원본은 [requirements.md](requirements.md), Sync 정책은 [README](../README.md)를 따른다.
-이 문서는 초기 단일 Pod 배포의 실행 절차와 사전·브랜치 배포 검증 기록이다. main 배포 완료 기록은 아니다.
+이 문서는 orbit-server 배포의 실행 절차와 사전·브랜치 배포 검증 기록이다.
+초기 단일 Pod 배포(#24) 후 HPA를 추가했다. 아래 검증 기록 절은 단일 Pod 시점의 기록이다.
 
-## 이번 구현 범위
+## 구현 범위
 
-- `workloads/orbit-server/`: ConfigMap, Deployment, NodePort Service, PDB, Kustomization.
+- `workloads/orbit-server/`: ConfigMap, Deployment, NodePort Service, PDB, HPA, Kustomization.
 - `clusters/orbit-astra/apps/orbit-server.yaml`: Application `orbit-astra-orbit-server`.
-- HPA 도입 전 기동·DB·업로드 검증을 위해 `replicas: 1`로 시작한다. #7의 최종 최소 2·최대 4 구성은 후속 작업이다.
+- HPA가 Pod 수를 최소 2·최대 4로 정하므로 Deployment에는 `replicas`를 적지 않는다.
+- HPA는 CPU 평균 사용률 70%를 목표로 하고, 확장은 안정화 30초·30초마다 1개씩이다. 축소는 기본 정책(안정화 300초)을 따른다.
 - 이미지는 `ghcr.io/orbit-cloud-labs/orbit-server:6cb87138b7b797faeed566670e180619303fafbc`로 고정한다.
-- CPU request/limit은 초기값 `500m`, 메모리 request/limit은 `768Mi`, Hikari 최대 연결은 5이다. CPU 적정성은 부하 사전 측정으로 판단한다.
+- CPU request/limit은 초기값 `500m`, 메모리 request/limit은 `768Mi`, Hikari 최대 연결은 5이다.
+  CPU limit과 HPA 목표 사용률은 초기값이며 [orbit#23](https://github.com/ORBIT-CLOUD-LABS/orbit/issues/23)의 부하 사전 측정으로 조정한다.
+  request와 limit이 같으므로 HPA 사용률은 100%를 넘지 않는다.
 - Service는 8080을 NodePort `30080`으로 노출한다. API와 `/actuator/prometheus`가 같은 포트를 사용한다.
 - ConfigMap의 `CDN_BASE_URL`은 `http://192.168.100.102:30081`이다. 차량·부하 발생기에서도 이 주소에 접근 가능해야 한다.
 - 기존 `origin-files-rw` PVC를 `/data/origin`에 쓰기로 마운트한다. `ORIGIN_ROOT_PATH`와 mountPath를 함께 변경한다.
@@ -22,8 +26,9 @@ liveness는 서버 상태만, readiness는 DB 연결까지 검사한다. 5초 pr
 worker label이 있는 노드에만 배치하고 topology spread는 분산을 선호한다. 여러 Pod의 서로 다른 노드 배치를 강제하지는 않는다.
 롤링 업데이트는 maxSurge 1·maxUnavailable 0이므로 일시적으로 추가 Pod와 DB 연결을 사용한다.
 
-PDB `minAvailable: 1`은 계획된 축출에 적용된다. 단일 Pod 상태에서는 해당 Pod의 drain을 막을 수 있으므로
-노드 점검 전 여분 Pod 준비와 배치 상태를 확인한다. 노드 장애·강제 삭제를 막거나 단일 Pod의 무중단 서비스를 보장하지 않는다.
+PDB `minAvailable: 1`은 계획된 축출에 적용된다. HPA 최소 2개 상태에서는 한 번에 1개씩 축출할 수 있다.
+topology spread가 분산을 강제하지 않으므로 두 Pod가 같은 노드에 있으면 그 노드 drain 동안 Pod가 순차로 옮겨진다.
+노드 점검 전 Pod 배치를 확인한다. PDB는 노드 장애·강제 삭제를 막지 않는다.
 
 ## 병합 전 확인
 
@@ -43,7 +48,8 @@ kubectl get secret orbit-server-secret -n orbit \
   -o go-template='{{range $k, $v := .data}}{{$k}}{{"\n"}}{{end}}'
 ```
 
-workloads에 orbit 목적지와 ConfigMap·Deployment·Service·PodDisruptionBudget이 허용되어 있어야 한다.
+workloads에 orbit 목적지와 ConfigMap·Deployment·Service·PodDisruptionBudget·HorizontalPodAutoscaler가 허용되어 있어야 한다.
+HPA가 CPU 사용률을 읽으려면 metrics-server(#8)가 동작해야 한다(`kubectl top pods -n orbit`).
 Secret 키는 ADMIN_TOKEN·DB_PASSWORD·ENROLLMENT_KEY이며 값은 출력하거나 증거에 남기지 않는다.
 PVC Bound, NodePort 30080 미사용, worker 자원·label·taint, CDN 접근을 병합 직전에 다시 확인한다.
 Secret 관리 절차는 [orbit-server-secret.md](orbit-server-secret.md), PVC·CDN 절차는 [cdn.md](cdn.md)를 따른다.
@@ -77,6 +83,7 @@ kubectl get pods -n orbit -l app=orbit-server -o wide
 kubectl get deployment orbit-server -n orbit
 kubectl get service orbit-server -n orbit
 kubectl get pdb orbit-server -n orbit
+kubectl get hpa orbit-server -n orbit
 kubectl get pods -n orbit -l app=orbit-server \
   -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.spec.nodeName}{" "}{.status.containerStatuses[0].imageID}{"\n"}{end}'
 curl --fail --silent --show-error http://192.168.100.102:30080/actuator/health
@@ -85,7 +92,7 @@ curl --fail --silent --show-error http://192.168.100.102:30080/actuator/health/r
 curl --fail --silent --show-error http://192.168.100.102:30080/actuator/prometheus
 ```
 
-Pod 1개 Ready·재시작 0, Service의 Ready endpoint, health 응답 UP,
+Pod 2개 Ready·재시작 0, HPA의 CPU 사용률이 `<unknown>`이 아닌 값, Service의 Ready endpoint, health 응답 UP,
 Prometheus 메트릭의 `application="orbit-server"` 태그를 확인한다.
 Argo CD의 적용 revision·Sync/Health·operation을 확인해 수동 Sync 없이 적용됐는지 기록한다.
 
@@ -143,10 +150,10 @@ kubectl rollout status deployment/orbit-server -n orbit --timeout=300s
 
 ## 남은 작업
 
-이 기록만으로 #7을 종료하지 않는다. main 반영 후 Application이 main을 참조하는지와 자동 Sync·Ready·HTTP 응답을 다시 확인한다.
-[orbit#23](https://github.com/ORBIT-CLOUD-LABS/orbit/issues/23)의 사전 측정으로 CPU와 목표 사용률을 정한 뒤
-HPA 최소 2·최대 4, 확장 안정화 30초·한 번에 1개 정책을 추가하고 Deployment의 replicas를 제거한다.
-HPA CPU 값과 scale-out·scale-in은 그 후 별도로 검증한다.
+HPA는 초기값(CPU limit `500m`, 목표 사용률 70%)으로 추가했다. main 반영 후 위 "자동 배포와 확인" 절차로
+Pod 2개 Ready와 HPA CPU 값 표시를 확인한다.
+[orbit#23](https://github.com/ORBIT-CLOUD-LABS/orbit/issues/23)의 사전 측정으로 CPU limit과 목표 사용률을 조정하고,
+scale-out·scale-in은 그 실험에서 검증한다.
 
 ## 병합 전 브랜치 실제 배포 검증 — 2026-10-16 KST
 

@@ -4,8 +4,7 @@ metadata:
   name: orbit-server
   namespace: orbit
 spec:
-  # HPA 도입 전 기본 배포 검증용. HPA가 개수를 관리하게 되면 제거한다.
-  replicas: 1
+  # replicas는 HPA(hpa.yaml)가 정하므로 적지 않는다.
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -46,7 +45,7 @@ spec:
             - secretRef:
                 name: orbit-server-secret
           resources:
-            # CPU는 초기 배포값. 부하 사전 측정 후 HPA 도입 시 조정한다.
+            # CPU는 임시 배포값. phase1 §4 미확정 값이며 orbit#23 사전 측정 후 HPA 목표 사용률과 함께 확정한다.
             requests:
               cpu: 500m
               memory: 768Mi
