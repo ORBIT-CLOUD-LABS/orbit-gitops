@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orbit-server
+  namespace: orbit
+spec:
+  # HPA 도입 전 기본 배포 검증용. HPA가 개수를 관리하게 되면 제거한다.
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: orbit-server
+  template:
+    metadata:
+      labels:
+        app: orbit-server
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 40
+      nodeSelector:
+        node-role.kubernetes.io/worker: ""
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: orbit-server
+      containers:
+        - name: orbit-server
+          image: ghcr.io/orbit-cloud-labs/orbit-server:6cb87138b7b797faeed566670e180619303fafbc
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: orbit-server-config
+            - secretRef:
+                name: orbit-server-secret
+          resources:
+            # CPU는 초기 배포값. 부하 사전 측정 후 HPA 도입 시 조정한다.
+            requests:
+              cpu: 500m
+              memory: 768Mi
+            limits:
+              cpu: 500m
+              memory: 768Mi
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 24
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 5"]
+          volumeMounts:
+            - name: origin-files
+              mountPath: /data/origin
+      volumes:
+        - name: origin-files
+          persistentVolumeClaim:
+            claimName: origin-files-rw
