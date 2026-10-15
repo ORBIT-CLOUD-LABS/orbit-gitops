@@ -28,7 +28,7 @@ root 설정이 바뀌지는 않는다. namespace·AppProject·저장소 인증�
 - 업무 앱은 `workloads`, 애드온은 `platform` 프로젝트를 사용한다. `default` 또는 `bootstrap`을 자식에 사용하지 않는다.
 - 기본 destination은 `https://kubernetes.default.svc`이다. `argocd` namespace에 업무·애드온을 배포하지 않는다.
 - root 자동 Sync·재시도는 infrastructure에서, 자식 정책은 이 저장소에서 관리한다.
-- #15 및 #7~#10 자식은 아래 자동 Sync·제한된 재시도 기준을 적용한다. 기존 smoke-test는 수동 정책을 유지한다.
+- #15에서 검증한 자동 Sync·제한된 재시도 기준을 #7~#10 자식에 적용한다. 기존 smoke-test는 수동 정책을 유지한다.
 - root와 자식의 Prune·Self Heal은 비활성화한다. UI 수동 Sync에서도 Prune을 선택하지 않는다.
 - 개인키, 토큰, 평문 Secret을 커밋하지 않는다. root나 자식에 삭제 연쇄 finalizer를 추가하지 않는다.
 - 앱 추가 시 infrastructure AppProject의 허용 namespace·리소스를 먼저 검토한다.
@@ -36,7 +36,7 @@ root 설정이 바뀌지는 않는다. namespace·AppProject·저장소 인증�
 
 ## Sync 정책
 
-CI/CD 배포 경로 검증 #15와 후속 #7~#10의 자식 Application 기준이다.
+CI/CD 배포 경로 검증 #15에서 확인한 후속 #7~#10의 자식 Application 기준이다.
 기존 Phase1 실험의 이미지·설정 고정 원칙은 유지하며, 부하 실험 중에는 Git 변경을 멈춘다.
 원본 `orbit/docs/phase1.md`의 수동 Sync 설명과 차이가 있으므로 원본 정책 정리는
 orbit 저장소에서 별도로 수행한다. 이 저장소에 원본을 복사하거나 직접 수정하지 않는다.
@@ -66,7 +66,9 @@ Ansible, 자식은 이 저장소에서 자동 Sync를 비활성화한다. root�
 
 Prune이 꺼져 있어 Git 파일 삭제만으로 Application·배포 리소스가 제거되지 않는다.
 삭제 연쇄 finalizer도 추가하지 않는다. 정리 목록과 순서를 검토하고 명시적으로 삭제한다.
-Nginx 배포·HTTP·rollout 검증과 정리 절차는 [deploy-test.md](docs/deploy-test.md)를 따른다.
+임시 Nginx를 이용한 자동 배포·재배포 검증은 완료했다. 선언 제거와 클러스터 잔여 리소스 정리는
+[#19](https://github.com/ORBIT-CLOUD-LABS/orbit-gitops/issues/19)에서 진행한다.
+[검증 이력과 정리 진행 상태](docs/deploy-test.md)는 기록으로 보존하며 현재 배포 대상 안내가 아니다.
 
 기존 smoke-test는 `message` v1→v2→v1 변경과 각 단계 수동 Sync로 확인한다.
 Self Heal이 꺼져 있으므로 직접 변경만으로 자동 복구되지 않아야 한다.
