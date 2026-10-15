@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: orbit-server-config
+  namespace: orbit
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+data:
+  DB_URL: jdbc:mysql://192.168.100.106:3306/vehicle
+  DB_USERNAME: vehicle_app
+  ORIGIN_ROOT_PATH: /data/origin
+  CDN_BASE_URL: http://192.168.100.102:30081
+  SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: "5"
+  SERVER_SHUTDOWN: graceful
+  SPRING_LIFECYCLE_TIMEOUT_PER_SHUTDOWN_PHASE: 30s
