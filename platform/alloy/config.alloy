@@ -103,12 +103,21 @@ prometheus.scrape "kube_state_metrics" {
 }
 
 // label은 namespace·app·pod·node 수준으로 제한한다(차량 ID·토큰 등을 label로 쓰지 않음).
+// 아래 추가 label은 orbit-observability#6 대시보드가 실제로 구분해야 하는 값들이다.
+// 이게 없으면 같은 namespace의 서로 다른 시계열이 하나로 합쳐져 패널이 틀린 값을 낸다:
+//   - deployment: kube_deployment_* — orbit-server·origin·edge Deployment 3개를 구분
+//   - container, resource, unit: kube_pod_container_resource_requests/limits — CPU/메모리
+//     request·limit이 같은 시계열로 충돌하는 걸 막음 (container는 cAdvisor 다중 컨테이너 Pod 구분에도 쓰임)
+//   - phase: kube_pod_status_phase — Pod 상태별 구분
+//   - metric_name, metric_target_type: kube_horizontalpodautoscaler_* — HPA가 어떤 지표를 보는지 구분
+//   - le, method, status, outcome: http_server_requests_seconds_bucket — le 없이는
+//     histogram_quantile 자체가 불가능하고(API P95 패널), method·status·outcome 없이는 오류율을 구분할 수 없음
 prometheus.relabel "limit_labels" {
 	forward_to = [prometheus.remote_write.monitoring_vm.receiver]
 
 	rule {
 		action = "labelkeep"
-		regex  = "__name__|namespace|app|pod|node|job|instance"
+		regex  = "__name__|namespace|app|pod|node|job|instance|deployment|container|resource|unit|phase|metric_name|metric_target_type|le|method|status|outcome"
 	}
 }
 
