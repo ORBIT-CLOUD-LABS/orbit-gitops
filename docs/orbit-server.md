@@ -2,7 +2,7 @@
 
 관련 이슈: [#7](https://github.com/ORBIT-CLOUD-LABS/orbit-gitops/issues/7).
 요구사항 원본은 [requirements.md](requirements.md), Sync 정책은 [README](../README.md)를 따른다.
-이 문서는 초기 단일 Pod 배포의 실행 절차와 사전 검증 기록이다. 실제 서버 배포 완료 기록이 아니다.
+이 문서는 초기 단일 Pod 배포의 실행 절차와 사전·브랜치 배포 검증 기록이다. main 배포 완료 기록은 아니다.
 
 ## 이번 구현 범위
 
@@ -67,7 +67,7 @@ Application dry-run이 AppProject의 배포 허용 여부를 대신하지 않으
 자식은 자동 Sync·최대 5회 재시도(5s, factor 2, maxDuration 3m), Prune·Self Heal 비활성화이며 삭제 연쇄 finalizer는 없다.
 부하 실험 중에는 이미지·설정 변경을 멈춘다.
 
-다음은 배포 후 실행할 명령이다. 아직 실행 결과로 기록하지 않았다.
+다음은 배포 후 실행할 명령이다. 병합 전 브랜치 검증의 실제 실행 결과는 문서 마지막에 별도로 기록했다.
 
 ```bash
 git rev-parse HEAD
@@ -128,6 +128,8 @@ kubectl rollout status deployment/orbit-server -n orbit --timeout=300s
 
 ## 실제 사전 검증 기록 — 2026-10-16 KST
 
+아래는 브랜치 실제 배포 전 시점의 기록이다. 이후 실제 기동·API 검증 결과는 마지막 절을 따른다.
+
 - orbit namespace 존재, worker 3대 Ready, worker label·taint 및 workloads 프로젝트의 목적지·리소스 허용 범위를 조회했다.
 - orbit-server-secret에 필수 키 3개가 존재한다. 값의 유효성은 미검증이다.
 - origin-files-rw는 Bound·RWX이다. 서버 UID의 실제 쓰기는 미검증이다.
@@ -141,7 +143,46 @@ kubectl rollout status deployment/orbit-server -n orbit --timeout=300s
 
 ## 남은 작업
 
-이 기록만으로 #7을 종료하지 않는다. main 반영 후 위 실제 배포 검증을 수행한다.
+이 기록만으로 #7을 종료하지 않는다. main 반영 후 Application이 main을 참조하는지와 자동 Sync·Ready·HTTP 응답을 다시 확인한다.
 [orbit#23](https://github.com/ORBIT-CLOUD-LABS/orbit/issues/23)의 사전 측정으로 CPU와 목표 사용률을 정한 뒤
 HPA 최소 2·최대 4, 확장 안정화 30초·한 번에 1개 정책을 추가하고 Deployment의 replicas를 제거한다.
 HPA CPU 값과 scale-out·scale-in은 그 후 별도로 검증한다.
+
+## 병합 전 브랜치 실제 배포 검증 — 2026-10-16 KST
+
+로컬 임시 Application만 targetRevision을 task/7-deploy-orbit-server로 바꿔 제어 노드에 적용했다.
+커밋된 Application은 main을 유지한다. 기존 서버 Application·Deployment가 없음을 확인한 뒤 생성했으며,
+서버 리소스는 수동 apply하지 않고 자식 Application의 자동 Sync로 배포했다.
+
+| 항목 | 실제 결과 |
+| --- | --- |
+| 적용 revision | d18eb933ce046c6c307aad8dce4c20514f0698ce |
+| Argo CD | Synced·Healthy, operation Succeeded, initiatedBy.automated=true |
+| Pod | orbit-server-5d779dc6b-tj52b, astra-worker-1, 1/1 Ready, 재시작 0 |
+| 실행 imageID | sha256:60f0e2e3f89a6a1268c21e3861b6efb79b222507a516a2e9d12e3b2c0f327f5f |
+| 실행 사용자 | uid=10001, gid=10001 |
+| 기동 시간 | 애플리케이션 로그 기준 59.413초, 프로세스 기준 63.487초 |
+| Flyway | DB VM 직접 조회: V1 init·V2 create vehicle status view 모두 success=1 |
+| health·liveness·readiness | 제어 노드에서 모두 HTTP 200·UP |
+| Prometheus | HTTP 200, application="orbit-server" 태그 확인 |
+| 차량 등록 | 인증 없이 HTTP 401, 등록 키 사용 시 HTTP 201·차량 토큰 발급 확인. 토큰 미기록 |
+| 파일 업로드 | 관리자 인증으로 HTTP 201, artifactId=1, fileSize=71680 |
+| Origin·각 Edge | 다운로드 byte·SHA-256 모두 원본과 일치 |
+| Edge 캐시 | 두 Edge Pod IP에 각각 요청해 모두 MISS → HIT |
+| worker NodePort | 제어 노드에서 192.168.100.102~104:30081 모두 HTTP 200·해시 일치 |
+| 클러스터 밖 접근 | ASTRA 호스트에서 서버 health UP·CDN 다운로드 해시 일치 |
+| 현재 Mac 직접 접근 | 192.168.100.102:30080 연결 timeout. 차량·부하 발생기의 별도 접근 경로 확인 필요 |
+
+초기 45초 rollout 대기는 기동 완료 전에 timeout됐고, 이후 재확인에서는 rollout이 성공했다.
+startup probe의 약 2분 허용 범위 안에 기동했으며 재시작은 없었다. 부하·장시간 안정성 시험은 하지 않았다.
+
+시험 식별자는 GITOPS7-20261015T153712Z이며 같은 이름의 차량·model을 사용했다.
+파일 경로는 /firmware/GITOPS7-20261015T153712Z/1.0.0/firmware.bin,
+SHA-256은 23dea6f8d8dea47d3a0a2469ec83c868b9b22f98afdebc879fce818b620e5a0c이다.
+차량·artifact DB 행, NFS 시험 파일, Edge 캐시는 검증 후 보존했다. 임의 DB·공유 파일 삭제는 하지 않았다.
+Secret은 검사 프로세스 메모리에서만 읽고, 원문이나 발급 차량 토큰을 출력·문서화하지 않았다.
+
+검증 종료 시 임시 Application과 서버 Pod는 작업 브랜치를 참조한 채 유지한다.
+main 병합 후 root가 같은 이름의 Application을 main 선언으로 갱신했는지 확인한다.
+Self Heal이 꺼져 있으므로 main 반영 전에는 자동으로 main 참조로 돌아가지 않는다.
+병합하지 않고 테스트를 종료한다면 자동 Sync·root 재생성 영향을 검토한 별도 정리 절차를 수행한다.
