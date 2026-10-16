@@ -7,6 +7,23 @@
 crds:
   create: false
 
+# DaemonSet replica 3개가 노드 범위를 모르는 채로 동일 config를 실행하면
+# kube_state_metrics(고정 단일 target)가 3배로 중복 scrape·remote_write돼
+# Prometheus에 "duplicate sample for timestamp" 에러가 계속 발생한다.
+# config.alloy의 kube_state_metrics scrape에 clustering { enabled = true }를
+# 걸어 cluster peer 중 정확히 하나만 이 target을 scrape하도록 한다. peer 탐색은
+# 차트가 자동으로 만드는 headless Service(cluster.join-addresses)로 처리되어
+# 별도 리소스 추가가 필요 없다.
+#
+# kubelet/cAdvisor·orbit-server Pod·orbit namespace 로그처럼 "노드별로 존재하는"
+# target은 clustering sharding 대신 각 replica가 자기 노드 몫만 scrape·tail하도록
+# 한다(불필요한 노드 간 스크랩 트래픽 회피). config.alloy는 이 비교를 chart가
+# 기본으로 주입하는 K8S_NODE_NAME env(차트 templates/containers/_agent.yaml 주석:
+# "Default used by some Alloy components")로 한다 — 별도 extraEnv 불필요.
+alloy:
+  clustering:
+    enabled: true
+
 # rbac.namespaces를 쓰지 않으면 차트(templates/rbac.yaml)가 rules·clusterRules를
 # 구분 없이 하나의 ClusterRole로 합친다. node 접근(clusterRules) 자체가 namespace가
 # 없는 리소스라 Role/RoleBinding으로 분리할 수 없기 때문에, rules(pods/pods-log/

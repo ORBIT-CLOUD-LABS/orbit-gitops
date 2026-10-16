@@ -1,6 +1,16 @@
 // orbit-gitops#10: 클러스터 메트릭·로그를 모니터링 VM(192.168.100.107)의 Prometheus·Loki로 전송한다.
 // 서버 메트릭 포트(8080)·경로(/actuator/prometheus)는 orbit docs/phase1.md 공통 값 표 기준 "미확정" 값이다.
 // 확정되면 이 파일의 orbit_server 관련 블록을 갱신한다.
+//
+// Alloy는 DaemonSet(노드마다 1개, 현재 3 replica)이라 동일 config가 그대로 복제 실행된다.
+// orbit-server Pod·kubelet/cAdvisor·orbit namespace 로그처럼 "노드별로 존재하는" target을
+// 노드 범위 없이 discovery.kubernetes로만 찾으면 3개 replica가 전부 같은 대상을 중복
+// scrape·tail해 Prometheus에 duplicate/out-of-order sample 에러가 계속 발생한다
+// (실측: 머지 직후 모든 Alloy pod 로그에서 지속 확인됨). 아래에서는 각 replica가 자기
+// 노드(chart가 기본으로 주입하는 K8S_NODE_NAME env) 몫만 담당하도록 discovery.relabel에
+// keep 규칙을 추가한다. kube-state-metrics는 노드별 target이 아니라 고정 단일 target이라
+// 이 방식이 적용되지 않으므로, 그 scrape는 대신 Alloy clustering으로 cluster peer 중
+// 하나만 scrape하도록 분리했다(해당 블록 주석 참조).
 
 logging {
 	level  = "info"
@@ -45,6 +55,15 @@ discovery.relabel "orbit_server_targets" {
 		source_labels = ["__meta_kubernetes_pod_name"]
 		target_label  = "pod"
 	}
+
+	// 이 Pod가 뜬 노드와 이 Alloy replica의 노드(env K8S_NODE_NAME)가 같을 때만 남긴다.
+	// orbit-server Pod는 노드마다 있을 수 있는 target이라 replica별로 자기 노드 몫만
+	// scrape하면 전체 replica를 합쳐 중복 없이 전부 커버된다.
+	rule {
+		source_labels = ["__meta_kubernetes_pod_node_name"]
+		regex         = env("K8S_NODE_NAME")
+		action        = "keep"
+	}
 }
 
 prometheus.scrape "orbit_server" {
@@ -76,6 +95,15 @@ discovery.relabel "kubelet_targets" {
 		source_labels = ["__meta_kubernetes_node_name"]
 		target_label  = "node"
 	}
+
+	// discovery.kubernetes(role=node)는 클러스터의 모든 노드를 반환한다. 이 replica의
+	// 노드(env K8S_NODE_NAME)와 다른 노드는 버려서 각 replica가 자기 노드의 kubelet만
+	// scrape하게 한다 — 안 그러면 replica 3개가 노드 3개를 전부 중복 scrape한다.
+	rule {
+		source_labels = ["__meta_kubernetes_node_name"]
+		regex         = env("K8S_NODE_NAME")
+		action        = "keep"
+	}
 }
 
 prometheus.scrape "kubelet_cadvisor" {
@@ -93,13 +121,23 @@ prometheus.scrape "kubelet_cadvisor" {
 
 // ---------- 메트릭: kube-state-metrics ----------
 // 동일 네임스페이스 Service(fixed DNS)를 고정 대상으로 scrape한다. K8s SD는 쓰지 않는다.
-
+//
+// 이 target은 노드별이 아니라 단일 고정 주소라 orbit_server·kubelet처럼 K8S_NODE_NAME
+// keep 규칙으로 나눌 수 없다 — 그대로 두면 replica 3개가 똑같은 target을 scrape해
+// 동일 시계열을 3번 remote_write하게 된다. clustering { enabled = true }를 걸면
+// (values.yaml의 alloy.clustering.enabled: true로 cluster peer 탐색이 켜져 있어야
+// 함) Alloy가 cluster peer 사이에서 target을 일관 해싱으로 나눠, replica 3개 중
+// 정확히 1개만 이 target을 실제로 scrape한다.
 prometheus.scrape "kube_state_metrics" {
 	targets = [{
 		__address__ = "kube-state-metrics.observability.svc.cluster.local:8080",
 	}]
 	scrape_interval = "30s"
 	forward_to      = [prometheus.relabel.limit_labels.receiver]
+
+	clustering {
+		enabled = true
+	}
 }
 
 // label은 namespace·app·pod·node 수준으로 제한한다(차량 ID·토큰 등을 label로 쓰지 않음).
@@ -141,8 +179,22 @@ discovery.kubernetes "orbit_pods" {
 	}
 }
 
+// orbit_server_targets와 같은 이유로 노드 범위를 제한한다: discovery.kubernetes는
+// namespace 안의 모든 노드에 걸친 Pod를 반환하므로, 이 필터가 없으면 replica 3개가
+// 같은 Pod의 로그를 3번씩 중복 tail·push한다(실제 트래픽이 들어오면 Loki 쪽에서도
+// "duplicate"/"entry out of order" push 거부가 발생할 수 있다).
+discovery.relabel "orbit_logs_local_only" {
+	targets = discovery.kubernetes.orbit_pods.targets
+
+	rule {
+		source_labels = ["__meta_kubernetes_pod_node_name"]
+		regex         = env("K8S_NODE_NAME")
+		action        = "keep"
+	}
+}
+
 loki.source.kubernetes "orbit_logs" {
-	targets    = discovery.kubernetes.orbit_pods.targets
+	targets    = discovery.relabel.orbit_logs_local_only.output
 	forward_to = [loki.process.limit_labels.receiver]
 }
 
