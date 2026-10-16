@@ -186,6 +186,31 @@ discovery.kubernetes "orbit_pods" {
 discovery.relabel "orbit_logs_local_only" {
 	targets = discovery.kubernetes.orbit_pods.targets
 
+	// orbit-gitops#33: orbit_server_targets와 달리 이 블록에 __meta_kubernetes_*를
+	// 실제 라벨로 승격하는 rule이 없어서, 아래 loki.process의 stage.label_keep이
+	// 지킬 라벨이 하나도 없는 채로 로그가 Loki에 전송됐다(라벨 없는 스트림은 Loki가
+	// service_name=unknown_service로 받아줘서 전송 자체는 성공하지만 namespace/pod
+	// 라벨로는 조회가 불가능했다 — 실측 확인됨).
+	rule {
+		source_labels = ["__meta_kubernetes_namespace"]
+		target_label  = "namespace"
+	}
+
+	rule {
+		source_labels = ["__meta_kubernetes_pod_name"]
+		target_label  = "pod"
+	}
+
+	rule {
+		source_labels = ["__meta_kubernetes_pod_label_app"]
+		target_label  = "app"
+	}
+
+	rule {
+		source_labels = ["__meta_kubernetes_pod_container_name"]
+		target_label  = "container"
+	}
+
 	rule {
 		source_labels = ["__meta_kubernetes_pod_node_name"]
 		regex         = env("K8S_NODE_NAME")
