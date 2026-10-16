@@ -201,6 +201,21 @@ loki.source.kubernetes "orbit_logs" {
 loki.process "limit_labels" {
 	forward_to = [loki.write.monitoring_vm.receiver]
 
+	// orbit-gitops#31: loki.source.kubernetes는 K8s log stream이 재연결될 때마다
+	// 컨테이너 시작 시점부터 다시 읽어서 보낸다(읽은 위치를 유지하지 못함 — Alloy
+	// 자체에 이 동작을 바꾸는 옵션이 없음, 공식 레퍼런스 확인됨). 그렇게 다시 읽은
+	// 오래된 줄들이 모니터링 VM Loki의 "entry too far behind"(reject_old_samples)
+	// 기준을 넘기면 Loki가 그 배치를 통째로 400으로 거부하고, Alloy는 재시도 없이
+	// 배치 전체(최근에 새로 생긴 줄까지 포함)를 drop한다 — 그래서 로그가 한 줄도
+	// 안 들어오는 상태가 계속 재발했다(실측: cdn-edge·orbit-server 모두 동일 증상).
+	// 오래된 줄을 여기서 먼저 걸러내면 같은 배치에 묶여 같이 버려지던 최신 줄은
+	// 살아서 push된다. 30m은 Loki 쪽 허용 범위(실측상 1~1.5h)보다 충분히 짧게 잡은
+	// 값이라, 여기서 걸러지지 않고 넘어간 줄은 Loki에서도 거부되지 않는다.
+	stage.drop {
+		older_than          = "30m"
+		drop_counter_reason = "orbit-gitops#31: loki reject_old_samples 회피"
+	}
+
 	stage.label_keep {
 		values = ["namespace", "app", "pod", "container"]
 	}
