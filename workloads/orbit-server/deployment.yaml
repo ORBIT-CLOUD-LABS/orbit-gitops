@@ -35,7 +35,7 @@ spec:
               app: orbit-server
       containers:
         - name: orbit-server
-          image: ghcr.io/orbit-cloud-labs/orbit-server:6cb87138b7b797faeed566670e180619303fafbc
+          image: "ghcr.io/orbit-cloud-labs/orbit-server:b185ffeecd186cefbf3c5c0efef7c9497ffc3ae5@sha256:adafcf90f80839710febbf9c880477c30bc87cb62a33830a1496a7eba28ae358"
           ports:
             - name: http
               containerPort: 8080
