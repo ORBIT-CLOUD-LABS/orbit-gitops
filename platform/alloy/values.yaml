@@ -37,6 +37,10 @@ rbac:
     - apiGroups: [""]
       resources: ["pods", "pods/log", "namespaces"]
       verbs: ["get", "list", "watch"]
+    # loki.source.kubernetes_events(orbit namespace 이벤트)에 필요한 최소 권한
+    - apiGroups: [""]
+      resources: ["events"]
+      verbs: ["get", "list", "watch"]
   clusterRules:
     # discovery.kubernetes(role=node)에 필요한 최소 권한
     - apiGroups: [""]
