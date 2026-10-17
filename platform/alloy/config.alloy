@@ -112,7 +112,7 @@ prometheus.scrape "kubelet_cadvisor" {
 	metrics_path       = "/metrics/cadvisor"
 	bearer_token_file  = "/var/run/secrets/kubernetes.io/serviceaccount/token"
 	scrape_interval    = "30s"
-	forward_to         = [prometheus.relabel.limit_labels.receiver]
+	forward_to         = [prometheus.relabel.cadvisor_select.receiver]
 
 	tls_config {
 		insecure_skip_verify = true
@@ -140,6 +140,51 @@ prometheus.scrape "kube_state_metrics" {
 	}
 }
 
+// ---------- cAdvisor 시계열 선별 ----------
+// cAdvisor는 Pod·컨테이너 단위 지표 외에 블록 디바이스별(container_fs_*,
+// container_blkio_*), 네트워크 인터페이스별(container_network_*), cgroup 계층별
+// 롤업 시계열을 노드당 수백 개 내보낸다. 이들을 서로 구분하는 label은
+// device·id·interface·name·image·failure_type·scope인데, 아래 limit_labels의
+// labelkeep이 전부 지운다. 그러면 서로 다른 시계열이 동일한 label set으로 붕괴해
+// 한 scrape 안에 같은 (시계열, timestamp) 샘플이 여러 개 생기고, Prometheus가
+// "duplicate sample for timestamp" 400으로 거부한다.
+//
+// Prometheus 2.45는 이 soft error에서 appender를 Rollback하므로 **write 요청 전체**가
+// 버려진다 — 같은 배치에 실려 간 정상 샘플까지 함께 사라져서, 특정 노드의 cAdvisor
+// 지표가 통째로 비는 것처럼 보인다(orbit-gitops#35). 측정값: 노드당 붕괴 그룹
+// 194~252개, 거부 추정 샘플 945~1134개.
+//
+// 그래서 orbit-observability#6 대시보드가 실제로 쓰는 지표만 남긴다. 와일드카드
+// (container_cpu_.*·container_memory_.*)를 쓰지 않고 이름을 명시하는 이유는
+// container_memory_failures_total처럼 같은 접두사를 쓰면서 failure_type·scope로만
+// 구분되는 지표가 섞여 들어와 같은 붕괴를 다시 일으키기 때문이다.
+// 새 패널이 다른 cAdvisor 지표를 쓰게 되면 그 지표가 Pod·컨테이너 단위로 유일한지
+// 확인하고 이 목록에 추가한다.
+//
+// prometheus.scrape가 만드는 up·scrape_* 도 이 relabel을 거친다. 이들은 target마다
+// 하나라 붕괴하지 않으므로 함께 남긴다. 버리면 kubelet scrape 실패를 감지할 수 없다.
+prometheus.relabel "cadvisor_select" {
+	forward_to = [prometheus.relabel.limit_labels.receiver]
+
+	// 컨테이너 단위가 아닌 시계열(container label이 비어 있거나 POD)을 버린다.
+	//   - 노드·cgroup 계층 롤업: pod도 비어 있고 id로만 구분된다
+	//   - Pod 합계(pod cgroup)와 pause 컨테이너: 둘 다 pod=X, container=""이고
+	//     id·image·name으로만 구분된다
+	// 둘 다 labelkeep 후 반드시 충돌한다. 대시보드도 container!="", container!="POD"로
+	// 거르므로 잃는 값은 없다. up·scrape_* 는 container label이 없어 __name__으로 제외한다.
+	rule {
+		source_labels = ["__name__", "container"]
+		regex         = "container_.+;(|POD)"
+		action        = "drop"
+	}
+
+	rule {
+		source_labels = ["__name__"]
+		regex         = "up|scrape_.+|container_cpu_usage_seconds_total|container_cpu_cfs_periods_total|container_cpu_cfs_throttled_periods_total|container_memory_working_set_bytes"
+		action        = "keep"
+	}
+}
+
 // label은 namespace·app·pod·node 수준으로 제한한다(차량 ID·토큰 등을 label로 쓰지 않음).
 // 아래 추가 label은 orbit-observability#6 대시보드가 실제로 구분해야 하는 값들이다.
 // 이게 없으면 같은 namespace의 서로 다른 시계열이 하나로 합쳐져 패널이 틀린 값을 낸다:
@@ -147,6 +192,8 @@ prometheus.scrape "kube_state_metrics" {
 //   - container, resource, unit: kube_pod_container_resource_requests/limits — CPU/메모리
 //     request·limit이 같은 시계열로 충돌하는 걸 막음 (container는 cAdvisor 다중 컨테이너 Pod 구분에도 쓰임)
 //   - phase: kube_pod_status_phase — Pod 상태별 구분
+//   - qos_class: kube_pod_status_qos_class — Pod 하나당 guaranteed/burstable/besteffort
+//     3개 시계열이 qos_class로만 구분된다. 지우면 붕괴해 400을 유발한다(orbit-gitops#35).
 //   - metric_name, metric_target_type, horizontalpodautoscaler: kube_horizontalpodautoscaler_* — HPA 이름과
 //     어떤 지표를 보는지 구분
 //   - condition: kube_deployment_status_condition·kube_pod_status_ready — Available/Progressing,
@@ -159,7 +206,7 @@ prometheus.relabel "limit_labels" {
 
 	rule {
 		action = "labelkeep"
-		regex  = "__name__|namespace|app|pod|node|job|instance|deployment|container|resource|unit|phase|metric_name|metric_target_type|horizontalpodautoscaler|condition|area|le|method|status|outcome"
+		regex  = "__name__|namespace|app|pod|node|job|instance|deployment|container|resource|unit|phase|qos_class|metric_name|metric_target_type|horizontalpodautoscaler|condition|area|le|method|status|outcome"
 	}
 }
 
