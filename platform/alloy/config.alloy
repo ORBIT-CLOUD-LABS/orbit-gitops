@@ -70,7 +70,28 @@ prometheus.scrape "orbit_server" {
 	targets         = discovery.relabel.orbit_server_targets.output
 	metrics_path    = "/actuator/prometheus"
 	scrape_interval = "30s"
-	forward_to      = [prometheus.relabel.limit_labels.receiver]
+	forward_to      = [prometheus.relabel.orbit_server_labels.receiver]
+}
+
+// orbit-server(Spring Boot Micrometer) 지표는 아래 limit_labels 대신 이 허용목록을 쓴다.
+// limit_labels에는 uri·id 등이 없어서, 서로 다른 시계열이 같은 label set으로 붕괴했다
+// (서버 Pod 1개 기준 1017개 중 180 그룹). 같은 timestamp 샘플이 겹치면 하나만 남고 나머지는 사라진다:
+//   - uri: http_server_requests_seconds_* — 없으면 health probe·/actuator/prometheus·check-in·
+//     manifest가 method·status별로 하나로 합쳐져 API 요청률·P95 패널이 틀린 값을 낸다.
+//     서버가 /api/v1/vehicles/{vehicleId}/... 템플릿으로 내보내므로 차량 ID로 시계열이 늘지 않는다
+//   - id: jvm_memory_*·jvm_buffer_* — G1 Eden·Old·Survivor 등 메모리 영역 구분 (JVM heap 패널)
+//   - gc, action, cause: jvm_gc_pause_seconds_* — GC 종류별 구분 (GC 패널)
+//   - name, state, level, repository, pool, spring_security_*: executor·스레드 상태·logback·
+//     Spring Data·Hikari·Spring Security 지표의 구분 라벨. 대시보드는 안 쓰지만 지우면 붕괴한다
+// 서버가 새 지표·라벨을 내보내면 /actuator/prometheus 출력으로 붕괴 여부를 확인하고 추가한다.
+// 값이 계속 늘어나는 라벨(차량 ID·토큰 등)은 넣지 않는다.
+prometheus.relabel "orbit_server_labels" {
+	forward_to = [prometheus.remote_write.monitoring_vm.receiver]
+
+	rule {
+		action = "labelkeep"
+		regex  = "__name__|namespace|app|pod|node|job|instance|area|le|method|status|outcome|uri|id|gc|action|cause|name|state|level|repository|pool|spring_security_authentication_type|spring_security_reached_filter_section|spring_security_reached_filter_name"
+	}
 }
 
 // ---------- 메트릭: kubelet·cAdvisor (노드) ----------
@@ -198,9 +219,8 @@ prometheus.relabel "cadvisor_select" {
 //     어떤 지표를 보는지 구분
 //   - condition: kube_deployment_status_condition·kube_pod_status_ready — Available/Progressing,
 //     Pod Ready 여부(true/false/unknown) 구분
-//   - area: jvm_memory_used_bytes — heap/nonheap 구분
-//   - le, method, status, outcome: http_server_requests_seconds_bucket — le 없이는
-//     histogram_quantile 자체가 불가능하고(API P95 패널), method·status·outcome 없이는 오류율을 구분할 수 없음
+//   - area, le, method, outcome: orbit-server 지표용으로 추가했던 라벨. orbit-server는 이제
+//     orbit_server_labels를 쓰므로 여기서는 쓰이지 않는다(status는 kube_*_status_condition에도 쓰여 유지)
 prometheus.relabel "limit_labels" {
 	forward_to = [prometheus.remote_write.monitoring_vm.receiver]
 
