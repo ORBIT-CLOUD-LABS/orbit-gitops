@@ -313,6 +313,36 @@ loki.process "limit_labels" {
 	}
 }
 
+// ---------- 로그: orbit namespace Kubernetes 이벤트 ----------
+// HPA scale(SuccessfulRescale)·Pod 생성/삭제(Scheduled·Started·Killing)·probe 실패(Unhealthy)를
+// Loki 로그로 남겨 Grafana annotation 으로 그래프 위에 표시한다 (orbit#23 HPA·복구 실험).
+//
+// 이벤트는 노드별 대상이 아니라 클러스터 단위라, replica 3개가 각각 watch 하면 같은 이벤트가 3번
+// 들어간다. clustering 을 켜면 namespace 별로 peer 하나만 수집한다(kube_state_metrics scrape 와 같은 방식).
+// peer 가 바뀌면 이미 보낸 이벤트를 다시 보낼 수 있다(Kubernetes event TTL 기본 1시간 이내).
+loki.source.kubernetes_events "orbit_events" {
+	namespaces = ["orbit"]
+	job_name   = "k8s-events"
+	forward_to = [loki.process.k8s_events.receiver]
+
+	clustering {
+		enabled = true
+	}
+}
+
+// limit_labels 의 label_keep 은 job 을 지워 이벤트가 Pod 로그 스트림과 섞이므로 따로 둔다.
+// 남는 label: namespace, job="k8s-events", instance(컴포넌트 ID).
+loki.process "k8s_events" {
+	forward_to = [loki.write.monitoring_vm.receiver]
+
+	// orbit_logs 와 같은 이유(orbit-gitops#31): peer 변경으로 다시 보낸 오래된 이벤트가 Loki 의
+	// reject_old_samples 에 걸려 배치 전체가 버려지지 않게 먼저 거른다.
+	stage.drop {
+		older_than          = "30m"
+		drop_counter_reason = "orbit-gitops#31: loki reject_old_samples 회피 (k8s events)"
+	}
+}
+
 loki.write "monitoring_vm" {
 	endpoint {
 		url = "http://192.168.100.107:3100/loki/api/v1/push"
