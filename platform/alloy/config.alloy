@@ -160,20 +160,27 @@ prometheus.scrape "kube_state_metrics" {
 // 구분되는 지표가 섞여 들어와 같은 붕괴를 다시 일으키기 때문이다.
 // 새 패널이 다른 cAdvisor 지표를 쓰게 되면 그 지표가 Pod·컨테이너 단위로 유일한지
 // 확인하고 이 목록에 추가한다.
+//
+// prometheus.scrape가 만드는 up·scrape_* 도 이 relabel을 거친다. 이들은 target마다
+// 하나라 붕괴하지 않으므로 함께 남긴다. 버리면 kubelet scrape 실패를 감지할 수 없다.
 prometheus.relabel "cadvisor_select" {
 	forward_to = [prometheus.relabel.limit_labels.receiver]
 
-	// Pod 단위가 아닌 cgroup·노드 전체 롤업(pod label이 비어 있음)을 버린다.
-	// 이들은 id로만 구분되므로 labelkeep 후 반드시 충돌한다.
+	// 컨테이너 단위가 아닌 시계열(container label이 비어 있거나 POD)을 버린다.
+	//   - 노드·cgroup 계층 롤업: pod도 비어 있고 id로만 구분된다
+	//   - Pod 합계(pod cgroup)와 pause 컨테이너: 둘 다 pod=X, container=""이고
+	//     id·image·name으로만 구분된다
+	// 둘 다 labelkeep 후 반드시 충돌한다. 대시보드도 container!="", container!="POD"로
+	// 거르므로 잃는 값은 없다. up·scrape_* 는 container label이 없어 __name__으로 제외한다.
 	rule {
-		source_labels = ["pod"]
-		regex         = ""
+		source_labels = ["__name__", "container"]
+		regex         = "container_.+;(|POD)"
 		action        = "drop"
 	}
 
 	rule {
 		source_labels = ["__name__"]
-		regex         = "container_cpu_usage_seconds_total|container_cpu_cfs_periods_total|container_cpu_cfs_throttled_periods_total|container_memory_working_set_bytes"
+		regex         = "up|scrape_.+|container_cpu_usage_seconds_total|container_cpu_cfs_periods_total|container_cpu_cfs_throttled_periods_total|container_memory_working_set_bytes"
 		action        = "keep"
 	}
 }
