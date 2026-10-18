@@ -79,8 +79,11 @@ prometheus.scrape "orbit_server" {
 //   - uri: http_server_requests_seconds_* — 없으면 health probe·/actuator/prometheus·check-in·
 //     manifest가 method·status별로 하나로 합쳐져 API 요청률·P95 패널이 틀린 값을 낸다.
 //     서버가 /api/v1/vehicles/{vehicleId}/... 템플릿으로 내보내므로 차량 ID로 시계열이 늘지 않는다
-//   - id: jvm_memory_*·jvm_buffer_* — G1 Eden·Old·Survivor 등 메모리 영역 구분 (JVM heap 패널)
-//   - gc, action, cause: jvm_gc_pause_seconds_* — GC 종류별 구분 (GC 패널)
+//   - id: jvm_memory_*·jvm_buffer_* — 메모리 영역 구분. 서버 JVM은 Serial GC라 Eden Space·Survivor Space·
+//     Tenured Gen 등이다 (메모리 limit 768Mi에서는 JVM이 G1을 고르지 않는다). 없으면 영역별 값이 하나로
+//     붕괴해 JVM heap 패널(area별 합)이 틀린 값을 낸다
+//   - gc, action, cause: jvm_gc_pause_seconds_* — GC 종류(Copy·MarkSweepCompact)·원인별 구분.
+//     GC 전용 패널은 없지만 지우면 붕괴한다
 //   - name, state, level, repository, pool, spring_security_*: executor·스레드 상태·logback·
 //     Spring Data·Hikari·Spring Security 지표의 구분 라벨. 대시보드는 안 쓰지만 지우면 붕괴한다
 // 서버가 새 지표·라벨을 내보내면 /actuator/prometheus 출력으로 붕괴 여부를 확인하고 추가한다.
