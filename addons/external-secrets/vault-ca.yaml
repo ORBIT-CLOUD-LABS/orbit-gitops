@@ -1,0 +1,20 @@
+# astra /opt/vault/tls/vault-ca.crt에서 SSH로 확보한 공개 인증서. 개인키 아님.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vault-ca
+  namespace: external-secrets
+data:
+  vault-ca.crt: |
+    -----BEGIN CERTIFICATE-----
+    MIIBtjCCATygAwIBAgIUGakidSEtmfkxaLOmJ41XZqzu7MQwCgYIKoZIzj0EAwIw
+    GTEXMBUGA1UEAwwOT1JCSVQgVmF1bHQgQ0EwHhcNMjYxMTAxMTczNzI0WhcNMzYx
+    MDI5MTczNzI0WjAZMRcwFQYDVQQDDA5PUkJJVCBWYXVsdCBDQTB2MBAGByqGSM49
+    AgEGBSuBBAAiA2IABPkvgH+c5o8JhKYCL5hRYXFhqxg7gZo+992BYMdG5N/twpef
+    C7j22kHGl+WXq/p5J8t0HYEMBmfkYvgEPt/42H6N80HxtXMQBuKUBC1NM/EXGddO
+    HDgM5LVeSM9kTvxRm6NFMEMwDgYDVR0PAQH/BAQDAgEGMBIGA1UdEwEB/wQIMAYB
+    Af8CAQAwHQYDVR0OBBYEFIsdwIriFdP1g637uVqsI8FPHZQgMAoGCCqGSM49BAMC
+    A2gAMGUCMQD3GKRQxZfMV6Em5R6tbWph/x6AqddTpSw5MKLM052+JI/9dIA4WjaV
+    zqDKneUz38QCMB3Jrdd0rVzg09/YzpbgRJE/cs5qfpEVShYkoev4J3hqq9rCmb9d
+    SBTLEdpKYBAqQQ==
+    -----END CERTIFICATE-----
