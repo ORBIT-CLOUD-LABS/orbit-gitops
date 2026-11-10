@@ -2,7 +2,9 @@
 
 대상 선언과 고정 버전은 [external-secrets.md](external-secrets.md), 자식 Application
 정책은 [sync-policy.md](sync-policy.md)를 따른다. 아래 절차는 작성한 운영 지침이며
-**실제 배포·장애 시험·업그레이드·복원·삭제를 실행한 기록이 아니다.**
+실제 수행 결과는 [적용 기록](external-secrets.md#적용-기록-2026-11-10)에 구분한다.
+배포·가짜 값 동기화 시험은 확인했지만 업그레이드·CA 교체·전체 복원·삭제 절차는
+아직 실행하지 않았다.
 
 ## 첫 배포와 확인
 
@@ -45,6 +47,25 @@ kubectl kustomize addons/fluent-bit/secrets | kubectl apply --dry-run=server -f 
 오류 메시지·Ready 상태부터 확인한다. 조사 목적으로 운영 Vault를 seal하거나 중단하지
 않는다. 일반 Secret이나 토큰을 덤프하지 않는다. 기존 Secret이 있어도 원본 접근 실패가
 계속되면 자동 갱신·재생성이 불가능하므로, Secret 존재만으로 정상이라고 판단하지 않는다.
+
+## 앱별 Secret 추가
+
+1. 서버 등 새 앱의 namespace와 환경변수 이름을 먼저 확정한다. 일반 설정은 ConfigMap,
+   비밀번호·토큰 등 비밀값은 Vault 원본과 ESO Secret으로 나눈다.
+2. infrastructure에서 앱 namespace를 만들고 업무 앱용 AppProject의 대상 namespace와
+   필요한 리소스 종류를 허용한다. 앱 배포에 애드온 프로젝트 권한을 그대로 사용하지 않는다.
+3. 권한 있는 운영자가 `secret/orbit/k3s/<앱>`에 실제 값을 입력한다. Git에는 경로와
+   property 참조만 추가한다. 기존 ESO 정책의 읽기 범위에 포함되므로 새 앱을 이유로
+   Vault 정책을 `secret/orbit/*` 전체로 넓히지 않는다.
+4. `ClusterSecretStore/orbit-vault`의 `spec.conditions`에 앱 namespace를 명시적으로
+   허용한다. 이 목록은 사용 가능 namespace 제한이며 앱별 Vault 경로 격리는 아니다.
+5. 앱 namespace에 ExternalSecret을 만들고 `data[].secretKey`를 실제 환경변수 이름에
+   맞춰 하나씩 매핑한다. 생성 Secret 이름은 Deployment의 `secretKeyRef` 또는
+   `envFrom.secretRef`와 맞춘다. CA·SA·정식 인증 binding을 앱마다 복제할 필요는 없다.
+6. 새 CRD 스키마 검증과 server-side dry-run, ExternalSecret Ready·Secret 필수 키를
+   확인한 뒤 소비 앱을 배포한다. 키가 있다고 실제 외부 서비스 인증까지 확인된 것은
+   아니므로 앱의 실제 접속도 검증한다. 환경변수로 읽는 값은 Secret 갱신 후 파드
+   재시작이 필요하다.
 
 ## chart·CRD 업그레이드
 
@@ -141,6 +162,8 @@ Prune 비활성화는 수동 삭제나 Kubernetes ownerReference GC를 막지 �
    ownerReference 영향을 조사한 뒤 별도로 결정한다. 운영 Vault 원본은 자동 삭제하지 않는다.
 
 ## 가짜 값 시험과 기록
+
+### 시험 범위
 
 운영 Fluent Bit 비밀번호와 분리된 `orbit/k3s/` 아래 임시 Vault 경로, `fluent-bit`
 namespace 안의 고유 이름 ExternalSecret·Secret을 사용한다. 정식 ESO SA·binding·Store는
