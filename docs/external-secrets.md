@@ -1,8 +1,9 @@
 # External Secrets Operator (Phase2)
 
 작업: [#45](https://github.com/ORBIT-CLOUD-LABS/orbit-gitops/issues/45).
-현재는 ESO 설치 Application, Sync 정책, Vault 연결 선언, Fluent Bit용 ExternalSecret을 작성·로컬 검증한 단계다.
-운영 배포와 ExternalSecret 동기화 검증은 아직 하지 않았다.
+2026-11-10 PR #49 머지 후 운영 배포와 Fluent Bit Secret 생성, 가짜 값 동기화·재생성·
+접근 거부·정상 복원 및 시험 리소스 정리를 확인했다. 아래 적용 기록에서 실제 수행한
+검증과 남은 검증을 구분한다.
 
 ## 설치 선언
 
@@ -69,7 +70,7 @@ kubectl kustomize clusters/orbit-k3s/apps
   Git에는 렌더링 결과나 인증서 개인키를 저장하지 않는다.
 - ClusterSecretStore와 SecretStore CRD의 JSON 크기는 각각 365,268 / 365,221 bytes로
   262,144 bytes를 초과한다. 따라서 ESO Application은 server-side apply를 사용한다.
-- 서버 측 dry-run, 실제 노드 배치와 ESO Ready 여부는 아직 검증하지 않았다.
+- 이 절은 로컬 검증 기록이다. 서버 측 dry-run과 실제 배포 결과는 아래 적용 기록에 구분한다.
 
 ## Vault 연결 선언
 
@@ -108,7 +109,7 @@ astra에 개인 계정으로 SSH 접속해 `/opt/vault/tls/vault-ca.crt`만 읽�
   `openssl verify`로 CA 자체 서명 검증에 성공했다.
 - astra에서 원본 CA를 사용한 `https://10.0.0.201:8200/v1/sys/health` HTTPS 조회에
   성공했다. 당시 `initialized=true`, `sealed=false`, `standby=false`였다.
-  ESO 파드에서의 접속·로그인은 아직 확인하지 않았다.
+  이 조회는 astra에서의 TLS 확인이며, ESO의 실제 로그인·Secret 동기화 결과는 아래 적용 기록에 구분한다.
 
 ### 선언 검증과 첫 배포
 
@@ -135,7 +136,7 @@ sudo k3s kubectl -n external-secrets rollout status deployment/external-secrets-
 sudo k3s kubectl wait --for=condition=Ready clustersecretstore/orbit-vault --timeout=300s
 ```
 
-서버 측 dry-run과 위 운영 배포 후 확인 명령은 아직 실행하지 않았다.
+서버 측 dry-run과 실제 배포 상태 확인 결과는 아래 적용 기록에 남긴다.
 
 ## Fluent Bit ExternalSecret
 
@@ -183,7 +184,8 @@ Secret을 환경변수(`env`, `envFrom`)로 읽는 기존 파드는 Secret 갱�
 ExternalSecret `v1` CRD 스키마 검사를 통과했다. root 묶음의 자식 Application 3개도
 Argo CD v3.5.6 Application CRD 스키마 검사를 통과했다.
 Store 이름, namespace 허용 범위, Secret 이름·키와 주기·소유·삭제 정책을 대조했다.
-서버 측 dry-run과 아래 명령은 아직 실행하지 않았다.
+서버 측 dry-run은 아래 최종 검증에서 수행했다. 아래 Ready 대기와 Secret 이름·키 확인은
+2026-11-10 사용자가 실행했으며 적용 기록에 결과를 남겼다.
 
 ```bash
 # polaris에서 운영 배포 후 실행. data 값 대신 Ready와 키 이름만 확인한다.
@@ -194,11 +196,74 @@ sudo k3s kubectl -n fluent-bit get secret fluent-bit-elasticsearch \
   -o go-template='{{.metadata.namespace}}/{{.metadata.name}}{{"\n"}}{{range $key, $value := .data}}{{$key}}{{"\n"}}{{end}}'
 ```
 
-## 남은 작업
+## 적용 기록 (2026-11-10)
 
-1. 전체 선언을 한 PR로 검토한다. 첫 배포는 ESO·CRD·webhook → Store Ready →
-   ExternalSecret Ready 순으로 확인한다. Application 간 wave만으로 준비를 가정하지 않는다.
-2. 가짜 값으로 재생성·갱신·실패 중 기존 Secret 유지 시험을 하고 실제 적용 기록을 남긴다.
-3. [운영 절차](external-secrets-operations.md)에 따라 실제 수행한 적용·시험 결과를 기록한다.
+아래 결과는 `jyvnee`가 polaris에서 실행해 공유한 출력으로 확인했다.
+실제 비밀값은 출력하거나 기록하지 않았다. 운영 배포 선언은 PR #49의 머지 커밋
+`88e03affb5e62f0eba7b68adcd5ae551fcf012f1` 기준이다.
 
-아직 운영 배포 전이며, 실제 Fluent Bit Secret 생성·갱신은 확인하지 않았다.
+| 항목 | 결과 |
+| --- | --- |
+| root 연결 | `orbit-k3s-root` Synced / Healthy |
+| ESO 실행 | controller·webhook·cert-controller 3개 Running, sol/luna 워커에 배치 |
+| 초기 Store 오류 | Vault `auth/token/lookup-self` 403으로 InvalidProviderConfig |
+| 정책 보완 | Vault `eso-orbit`에 `auth/token/lookup-self` read와 `auth/token/revoke-self` update 반영 후 Store Ready. infrastructure 코드 반영은 사용자가 완료했다고 확인 |
+| 정식 Store | `ClusterSecretStore/orbit-vault` Ready 조건 충족 |
+| 정식 ExternalSecret | `fluent-bit/fluent-bit-elasticsearch` Ready 조건 충족 |
+| 정식 Secret | `fluent-bit/fluent-bit-elasticsearch`, 필수 키 `password` 확인. 값은 출력하지 않음 |
+
+이전 수동 로그인·KV 읽기 시험에는 ESO의 자기 토큰 검증·폐기 호출이 포함되지 않았다.
+기본 정책을 제외한 현재 구성에서는 위 두 토큰 API 권한을 명시적으로 유지해야 한다.
+실제 KV 읽기 범위는 `secret/data/orbit/k3s/*`를 유지한다.
+
+### 가짜 값 시험
+
+polaris에서 임시 시험 도구로 아래 검증을 실행했다. 시험 도구는 검증 후 삭제했다.
+시험 ExternalSecret/Secret은 `fluent-bit/eso-sync-check-de5bfe8cdb00`, Vault 원본은
+`secret/orbit/k3s/eso-sync-check-de5bfe8cdb00`이다. 토큰은 터미널에서 비표시 입력했고
+시험 결과에는 포함하지 않았다.
+
+| 시험 | 결과 |
+| --- | --- |
+| 최초 동기화·가짜 값 일치·Owner 참조 | PASS |
+| 시험 Secret 삭제 후 자동 재생성·UID 변경 | PASS |
+| Vault password patch 후 갱신·keep 키 보존 | PASS |
+| 시험 ExternalSecret의 범위 밖 경로 참조 | 해당 시험 ESO 로그의 403 permission denied 확인 |
+| 접근 실패 중 기존 시험 Secret 유지 | 값과 UID 유지 확인 |
+| 정상 경로 복원 | Ready와 동기화 재개 확인 |
+| 시험 ExternalSecret·생성 Secret 정리 | 삭제·GC 확인 |
+| 시험 Vault 값·버전 정리 | metadata 삭제와 부재 확인 |
+
+정식 ESO·Store·SA·binding·namespace와 실제 Fluent Bit Secret은 시험 중 수정하지 않았다.
+server-side dry-run과 Store 사용 불허 namespace 시험은 별도 최종 검증으로 수행했다.
+업그레이드·CA 교체·롤백·전체 복원·삭제는 문서 절차만 작성했으며 실행하지 않았다.
+
+### 최종 검증
+
+polaris에서 공개 manifest 7개를 대상으로 아래 두 항목의 PASS 출력을 확인했다.
+
+| 항목 | 결과 |
+| --- | --- |
+| 서버 측 dry-run | 자식 Application 3개, CA ConfigMap, 정식 binding, Store, ExternalSecret의 선언 7개 통과. 실제 저장 없음 |
+| Store 사용 불허 namespace | 시험 namespace `eso-ns-check-8292ee6b431f`에서 명시적 거부와 Secret 미생성 확인 |
+
+첫 실행은 시험 namespace 삭제 명령의 잘못된 `-o json` 옵션 때문에 정리 단계에서
+중단됐다. 사용자가 아래 명령을 별도로 실행해 시험 namespace 삭제 완료를 확인했다.
+
+```bash
+sudo k3s kubectl delete namespace eso-ns-check-8292ee6b431f \
+  --ignore-not-found --wait=true --timeout=180s
+sudo k3s kubectl -n argocd get applications
+```
+
+최종 Application 조회 결과:
+
+| Application | Sync | Health |
+| --- | --- | --- |
+| `orbit-k3s-root` | Synced | Healthy |
+| `orbit-k3s-external-secrets` | Synced | Healthy |
+| `orbit-k3s-external-secrets-vault` | Synced | Healthy |
+| `orbit-k3s-fluent-bit-secrets` | Synced | Healthy |
+
+정식 Store·ExternalSecret의 Ready와 Secret 필수 키는 앞선 직접 조회로 확인했다.
+최종 확인은 위 Application 조회 결과를 기준으로 기록했다.
