@@ -3,3 +3,4 @@ kind: Kustomization
 resources:
   - external-secrets.yaml
   - external-secrets-vault.yaml
+  - fluent-bit-secrets.yaml

@@ -1,7 +1,7 @@
 # External Secrets Operator (Phase2)
 
 작업: [#45](https://github.com/ORBIT-CLOUD-LABS/orbit-gitops/issues/45).
-현재는 ESO 설치 Application, Sync 정책, Vault 연결 선언을 작성·로컬 검증한 단계다.
+현재는 ESO 설치 Application, Sync 정책, Vault 연결 선언, Fluent Bit용 ExternalSecret을 작성·로컬 검증한 단계다.
 운영 배포와 ExternalSecret 동기화 검증은 아직 하지 않았다.
 
 ## 설치 선언
@@ -135,11 +135,68 @@ sudo k3s kubectl wait --for=condition=Ready clustersecretstore/orbit-vault --tim
 
 서버 측 dry-run과 위 운영 배포 후 확인 명령은 아직 실행하지 않았다.
 
-## 다음 구현
+## Fluent Bit ExternalSecret
 
-1. `fluent-bit` namespace에 위 표의 ExternalSecret과 배포 연결을 추가한다.
-2. 전체 선언을 한 PR로 검토한다. 첫 배포는 ESO·CRD·webhook → Store Ready →
+`orbit-k3s-fluent-bit-secrets` Application은 `develop`의 `addons/fluent-bit/secrets/`를
+배포한다. namespace는 `fluent-bit`, 프로젝트는 `orbit-k3s-addons`다.
+#45에서 비밀값 동기화를 먼저 구성하며, Fluent Bit 본체는 #46에서 배포한다.
+#46의 다른 Application에서 이 ExternalSecret을 중복 관리하지 않는다.
+
+- ExternalSecret과 생성할 Secret의 이름은 모두 `fluent-bit-elasticsearch`.
+- `ClusterSecretStore/orbit-vault`를 통해 `orbit/k3s/fluent-bit`의 `password`를
+  Secret 키 `password`에 명시적으로 매핑한다. `dataFrom`으로 다른 키를 가져오지 않는다.
+- `refreshPolicy: Periodic`, `refreshInterval: 1m`으로 원본 변경을 주기적으로 반영한다.
+- `creationPolicy: Owner`로 Secret을 생성·관리한다. Secret 삭제 시 ESO가 재생성하며,
+  **ExternalSecret 자체를 삭제하면 ownerReference에 의해 Secret도 삭제될 수 있다.**
+- `deletionPolicy: Retain`은 Vault 원본 삭제 시 기존 Secret을 유지하는 정책이다.
+  ExternalSecret 삭제까지 보호하는 설정은 아니다. 관련 [ESO 정책 문서](https://external-secrets.io/latest/guides/ownership-deletion-policy/).
+- Vault 접근 오류나 원본 누락 시 Ready 오류를 확인한다. 처음부터 원본이 없으면
+  Secret은 만들어지지 않으며, 재시도로 원본을 만들어 주지는 않는다.
+- 실제 password 값은 Git이나 검증 출력에 담지 않는다. Vault 원본의 존재·필수 키는
+  배포 전에 권한 있는 운영자가 값을 출력하지 않는 방식으로 확인한다.
+
+### #46에서 사용
+
+Fluent Bit 파드는 같은 `fluent-bit` namespace에서 다음과 같이 비밀번호를 참조한다.
+선정한 chart의 환경변수 설정 키에 맞춰 이 참조를 넣고, Elasticsearch 출력의
+`HTTP_Passwd`에서 `${ELASTICSEARCH_PASSWORD}`를 사용한다.
+
+```yaml
+# Fluent Bit 컨테이너의 env 예시. chart values 필드명은 #46에서 선정 버전과 대조한다.
+env:
+  - name: ELASTICSEARCH_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: fluent-bit-elasticsearch
+        key: password
+```
+
+Secret을 환경변수(`env`, `envFrom`)로 읽는 기존 파드는 Secret 갱신만으로 환경변수가
+바뀌지 않는다. 비밀번호 변경 후 Fluent Bit 파드를 재시작해야 새 값을 사용한다.
+자동 재시작 도입은 #45 범위에 포함하지 않는다.
+
+### 로컬 검증과 운영 확인
+
+`kubectl kustomize addons/fluent-bit/secrets` 렌더링과 chart 2.14.0의
+ExternalSecret `v1` CRD 스키마 검사를 통과했다. root 묶음의 자식 Application 3개도
+Argo CD v3.5.6 Application CRD 스키마 검사를 통과했다.
+Store 이름, namespace 허용 범위, Secret 이름·키와 주기·소유·삭제 정책을 대조했다.
+서버 측 dry-run과 아래 명령은 아직 실행하지 않았다.
+
+```bash
+# polaris에서 운영 배포 후 실행. data 값 대신 Ready와 키 이름만 확인한다.
+sudo k3s kubectl -n fluent-bit wait --for=condition=Ready externalsecret/fluent-bit-elasticsearch --timeout=300s
+sudo k3s kubectl -n fluent-bit get externalsecret fluent-bit-elasticsearch \
+  -o jsonpath='{range .status.conditions[*]}{.type}={.status} {.reason}{"\n"}{end}'
+sudo k3s kubectl -n fluent-bit get secret fluent-bit-elasticsearch \
+  -o go-template='{{.metadata.namespace}}/{{.metadata.name}}{{"\n"}}{{range $key, $value := .data}}{{$key}}{{"\n"}}{{end}}'
+```
+
+## 남은 작업
+
+1. 전체 선언을 한 PR로 검토한다. 첫 배포는 ESO·CRD·webhook → Store Ready →
    ExternalSecret Ready 순으로 확인한다. Application 간 wave만으로 준비를 가정하지 않는다.
-3. 가짜 값으로 재생성·갱신·실패 중 기존 Secret 유지 시험을 하고 실제 적용 기록을 남긴다.
+2. 가짜 값으로 재생성·갱신·실패 중 기존 Secret 유지 시험을 하고 실제 적용 기록을 남긴다.
+3. chart/CRD 업그레이드, CA 교체, 복구·롤백·삭제 절차를 정리한다.
 
-아직 ExternalSecret이 없으므로 이 단계만 배포해도 Fluent Bit 비밀번호는 생성되지 않는다.
+아직 운영 배포 전이며, 실제 Fluent Bit Secret 생성·갱신은 확인하지 않았다.
