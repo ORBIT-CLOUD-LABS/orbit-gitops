@@ -17,6 +17,8 @@
 - 세 Deployment는 control-plane 라벨이 없는 노드에만 배치한다.
   워커 역할 라벨이나 control-plane toleration은 사용하지 않는다.
 - Sync 정책: [sync-policy.md](sync-policy.md)
+- 배포·장애 확인·업그레이드·CA 교체·롤백·복구·삭제·시험:
+  [external-secrets-operations.md](external-secrets-operations.md)
 
 공식 chart index와 [릴리스](https://github.com/external-secrets/external-secrets/releases/tag/helm-chart-2.14.0)를
 2026-11-10 확인해 버전을 선정했다. chart archive SHA256은
@@ -197,6 +199,6 @@ sudo k3s kubectl -n fluent-bit get secret fluent-bit-elasticsearch \
 1. 전체 선언을 한 PR로 검토한다. 첫 배포는 ESO·CRD·webhook → Store Ready →
    ExternalSecret Ready 순으로 확인한다. Application 간 wave만으로 준비를 가정하지 않는다.
 2. 가짜 값으로 재생성·갱신·실패 중 기존 Secret 유지 시험을 하고 실제 적용 기록을 남긴다.
-3. chart/CRD 업그레이드, CA 교체, 복구·롤백·삭제 절차를 정리한다.
+3. [운영 절차](external-secrets-operations.md)에 따라 실제 수행한 적용·시험 결과를 기록한다.
 
 아직 운영 배포 전이며, 실제 Fluent Bit Secret 생성·갱신은 확인하지 않았다.
