@@ -83,7 +83,7 @@ kubectl kustomize clusters/orbit-k3s/apps
 | ClusterRoleBinding | `orbit-eso-vault-auth` | 정식 ESO SA에 `system:auth-delegator` 부여 |
 | ClusterSecretStore | `orbit-vault` | Vault 연결·Kubernetes 인증·사용 namespace 제한 |
 
-- Vault: `https://10.0.0.201:8200`, KV `path: secret`, `version: v2`.
+- Vault: `https://vault.orbit-labs.space:8200` (vault VM `10.10.0.1`), KV `path: secret`, `version: v2`.
 - 인증: `mountPath: kubernetes`, 역할 `eso`, SA `external-secrets/external-secrets`,
   audience `https://kubernetes.default.svc.cluster.local`.
 - `conditions.namespaces`는 `fluent-bit`만 허용한다. 다른 앱을 추가할 때는 해당
