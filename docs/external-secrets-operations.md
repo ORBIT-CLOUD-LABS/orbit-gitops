@@ -10,7 +10,7 @@
 
 1. infrastructure에서 Argo CD, root, AppProject와 `external-secrets`·`fluent-bit`
    namespace가 운영에 적용되어 있는지 확인한다. 새 namespace를 GitOps에서 만들지 않는다.
-2. Vault가 unseal되어 있고 워커에서 `10.0.0.201:8200`, Vault에서 k3s API
+2. Vault가 unseal되어 있고 워커에서 `vault.orbit-labs.space:8200`(`10.10.0.1`), Vault에서 k3s API
    `10.0.0.200:6443`으로 접속 가능해야 한다. Kubernetes 인증의 CA는 현재 클러스터
    CA여야 하고, `eso` 역할의 SA·namespace·audience가 선언과 같아야 한다.
 3. 권한 있는 운영자가 Vault `secret/orbit/k3s/fluent-bit`의 `password` 존재를

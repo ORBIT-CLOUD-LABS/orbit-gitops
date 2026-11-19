@@ -21,7 +21,7 @@ Phase2 k3s 클러스터의 배포 선언(Argo CD가 읽는 원본)을 작성·�
 
 ### 비밀값
 
-- 비밀값의 원본은 Vault(`https://10.0.0.201:8200`, KV v2)다. 클러스터 Secret은 External Secrets Operator(ESO)가 Vault에서 만든다.
+- 비밀값의 원본은 Vault(`https://vault.orbit-labs.space:8200`, vault VM `10.10.0.1`, KV v2)다. 클러스터 Secret은 External Secrets Operator(ESO)가 Vault에서 만든다.
 - k3s 앱 비밀값은 Vault `secret/orbit/k3s/` 아래에 둔다. ESO는 이 경로만 읽는다.
 - Git에는 ExternalSecret의 Vault 경로·키 참조만 둔다. 실제 값을 커밋하지 않는다.
 - Secret을 클러스터에 수동으로 만들어 쓰지 않는다.
