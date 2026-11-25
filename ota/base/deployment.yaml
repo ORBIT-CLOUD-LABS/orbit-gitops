@@ -83,8 +83,16 @@ spec:
             periodSeconds: 5
             timeoutSeconds: 2
             failureThreshold: 3
+          volumeMounts:
+            - name: cdn-edges
+              mountPath: /config
+              readOnly: true
           lifecycle:
             # Service에서 빠지는 동안 들어오는 요청을 받도록 종료를 잠시 늦춘다
             preStop:
               exec:
                 command: ["/bin/sh", "-c", "sleep 5"]
+      volumes:
+        - name: cdn-edges
+          configMap:
+            name: orbit-server-cdn-edges

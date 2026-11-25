@@ -1,0 +1,26 @@
+# 차량에게 내려 줄 CDN Edge 목록. 서버는 차량 위치에서 가까운 순으로 Edge를 고른다.
+# 서버 시작 때 읽으며, id 중복·좌표 범위 밖·default-edge-id가 목록에 없으면 서버가 뜨지 않는다.
+#
+# base-url은 cdn.orbit-labs.space 하나에 Edge마다 경로를 나눈다 (rp-core·rp-cdn이 이 이름 하나만 받는다).
+# 서버는 URL 서명에 Edge 주소를 넣지 않고 Origin 경로(/firmware/...)만 넣는다.
+# 그래서 CDN 클러스터에서 /seoul 같은 앞 경로를 떼고(StripPrefix) Edge nginx에 넘겨야 서명이 맞는다.
+# Edge를 바꾸면 CDN 쪽 Edge 선언도 함께 고친다
+orbit:
+  cdn:
+    default-edge-id: edge-seoul
+    edges:
+      - id: edge-seoul
+        name: 서울
+        base-url: https://cdn.orbit-labs.space/seoul
+        latitude: 37.5665
+        longitude: 126.9780
+      - id: edge-daejeon
+        name: 대전
+        base-url: https://cdn.orbit-labs.space/daejeon
+        latitude: 36.3504
+        longitude: 127.3845
+      - id: edge-busan
+        name: 부산
+        base-url: https://cdn.orbit-labs.space/busan
+        latitude: 35.1796
+        longitude: 129.0756

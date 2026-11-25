@@ -27,3 +27,12 @@ configMapGenerator:
       # 종료 신호를 받으면 처리 중인 요청을 30초까지 마친다. terminationGracePeriodSeconds(40초)보다 짧게 둔다
       - SERVER_SHUTDOWN=graceful
       - SPRING_LIFECYCLE_TIMEOUT_PER_SHUTDOWN_PHASE=30s
+      # Edge 목록 파일. optional: 없이 적어 파일이 없으면 서버가 뜨지 않는다
+      - SPRING_CONFIG_IMPORT=file:/config/cdn-edges.yaml
+  # Edge 목록은 중첩 목록이라 환경 변수가 아니라 파일로 넣는다 (SPRING_CONFIG_IMPORT)
+  - name: orbit-server-cdn-edges
+    options:
+      annotations:
+        argocd.argoproj.io/compare-options: IgnoreExtraneous
+    files:
+      - cdn-edges.yaml
