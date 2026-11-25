@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orbit-server
+spec:
+  # replicas는 HPA가 정하므로 적지 않는다
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: orbit-server
+  template:
+    metadata:
+      labels:
+        app: orbit-server
+    spec:
+      automountServiceAccountToken: false
+      # preStop 5초 + graceful shutdown 30초(SPRING_LIFECYCLE_TIMEOUT_PER_SHUTDOWN_PHASE)보다 길게
+      terminationGracePeriodSeconds: 40
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      # 클러스터 VM 3대가 모두 server(control plane 겸 워커)라 노드 역할로 고르지 않고 노드마다 고르게 나눈다
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: orbit-server
+      containers:
+        - name: orbit-server
+          # tag와 digest는 kustomization.yaml의 images 항목이 정한다 (릴리스가 바꾸는 곳은 그 항목 하나)
+          image: ghcr.io/orbit-cloud-labs/orbit-server
+          ports:
+            - name: http
+              containerPort: 8080
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            # Phase1 부하 측정값을 그대로 쓴다. HPA 사용률은 request 500m 기준이다.
+            # limit을 request보다 높게 둔 이유: 막 뜬 Pod가 JIT 컴파일에 CPU를 쓰느라 상한에 막혀 응답이 밀렸다.
+            # 1000m에서는 Pod 2개가 DB(db.t3.micro) 한계 근처까지 처리해 HPA가 늘릴 일이 없어 750m으로 둔다.
+            # 메모리는 request=limit 768Mi (JVM 힙은 이미지의 MaxRAMPercentage=75로 약 576Mi)
+            requests:
+              cpu: 500m
+              memory: 768Mi
+            limits:
+              cpu: 750m
+              memory: 768Mi
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 24
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          readinessProbe:
+            # db를 포함한다. RDS에 닿지 않는 Pod는 요청을 받지 않는다
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+          lifecycle:
+            # Service에서 빠지는 동안 들어오는 요청을 받도록 종료를 잠시 늦춘다
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 5"]
