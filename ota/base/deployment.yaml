@@ -44,6 +44,8 @@ spec:
           envFrom:
             - configMapRef:
                 name: orbit-server-config
+            - secretRef:
+                name: orbit-server-secret
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
