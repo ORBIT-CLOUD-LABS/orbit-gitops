@@ -79,5 +79,64 @@ class ResourceCheckTest(unittest.TestCase):
         self.assertEqual(check_manifests.check_documents(docs), [])
 
 
+class ImageCheckTest(unittest.TestCase):
+    def check(self, image):
+        return check_manifests.image_errors(image)
+
+    def test_version_with_digest_pass(self):
+        self.assertEqual(self.check(GOOD_IMAGE), [])
+
+    def test_v_prefix_and_suffix_pass(self):
+        digest = "@sha256:" + "b" * 64
+        self.assertEqual(self.check("docker.io/fluent/fluent-bit:v3.1.9" + digest), [])
+        self.assertEqual(self.check("bitnami/kubectl:1.35.0-debian-12-r0" + digest), [])
+
+    def test_registry_port_pass(self):
+        image = "registry.local:5000/orbit/orbit-server:1.0.0@sha256:" + "c" * 64
+        self.assertEqual(self.check(image), [])
+
+    def test_tag_only_fail(self):
+        errors = self.check("ghcr.io/orbit-cloud-labs/orbit-server:1.2.4")
+        self.assertEqual(len(errors), 1)
+        self.assertIn("digest", errors[0])
+
+    def test_digest_only_fail(self):
+        errors = self.check("ghcr.io/orbit-cloud-labs/orbit-server@sha256:" + "a" * 64)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("버전 태그 없음", errors[0])
+
+    def test_moving_tags_fail(self):
+        for tag in ("latest", "prod"):
+            with self.subTest(tag=tag):
+                errors = self.check(f"ghcr.io/orbit-cloud-labs/orbit-server:{tag}@sha256:" + "a" * 64)
+                self.assertEqual(len(errors), 1)
+                self.assertIn("이동 태그", errors[0])
+
+    def test_sha_tag_fail(self):
+        errors = self.check("ghcr.io/orbit-cloud-labs/orbit-server:sha-1a2b3c4@sha256:" + "a" * 64)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("sha-", errors[0])
+
+    def test_non_version_tag_fail(self):
+        errors = self.check("ghcr.io/orbit-cloud-labs/orbit-server:main@sha256:" + "a" * 64)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("버전 형식", errors[0])
+
+    def test_bad_digest_fail(self):
+        errors = self.check("ghcr.io/orbit-cloud-labs/orbit-server:1.2.4@sha256:abc")
+        self.assertEqual(len(errors), 1)
+        self.assertIn("digest 형식", errors[0])
+
+    def test_missing_image_fail(self):
+        self.assertEqual(self.check(None), ["image 없음"])
+
+    def test_document_reports_image_violation(self):
+        image = "ghcr.io/orbit-cloud-labs/orbit-server:latest"
+        docs = [deployment([container(image=image, resources=FULL_RESOURCES)])]
+        violations = check_manifests.check_documents(docs)
+        self.assertEqual(len(violations), 1)
+        self.assertIn("Deployment ota/orbit-server containers[app]", violations[0])
+
+
 if __name__ == "__main__":
     unittest.main()
