@@ -17,7 +17,8 @@ Phase2 k3s 클러스터의 배포 선언(Argo CD가 읽는 원본)을 작성·�
 ### 선언
 
 - 미확정 공통 값(포트, Edge 목록, namespace, Sync 정책 등)은 확정된 것처럼 고정하지 말고 사용자에게 확인한다.
-- 이미지·Helm chart는 버전을 고정한다. 이미지는 커밋 SHA tag 또는 digest를 쓰고, `latest` 같은 이동 tag를 배포에 쓰지 않는다.
+- 이미지·Helm chart는 버전을 고정한다. 이미지는 `<이름>:<버전>@sha256:<digest>`로 쓴다.
+  `latest`·`prod` 같은 이동 tag, `sha-` tag, digest 없는 이미지는 PR 검사에서 실패한다.
 
 ### 비밀값
 
