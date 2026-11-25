@@ -41,6 +41,9 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: orbit-server-config
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:

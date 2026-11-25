@@ -8,3 +8,20 @@ resources:
   - deployment.yaml
   - service.yaml
   - ingress.yaml
+
+# 설정이 바뀌면 이름 끝 hash가 바뀌어 Pod가 새로 뜬다.
+# 지난 hash의 ConfigMap은 Prune이 꺼져 있어 남는데, 그것 때문에 OutOfSync가 되지 않도록 IgnoreExtraneous를 붙인다
+configMapGenerator:
+  - name: orbit-server-config
+    options:
+      annotations:
+        argocd.argoproj.io/compare-options: IgnoreExtraneous
+    literals:
+      # Origin S3. 엔드포인트(ORIGIN_ENDPOINT)는 비워 AWS 기본 주소로 간다 (S3 인터페이스 엔드포인트의 사설 DNS가 받음)
+      - ORIGIN_REGION=ap-northeast-2
+      - ORIGIN_BUCKET=orbit-firmware-origin-backup
+      # Pod당 DB 연결 수. Main·Sub가 RDS(db.t3.micro) 하나를 같이 쓰므로 두 클러스터 최대 Pod 수 × 5가 연결 상한 안에 들어야 한다
+      - SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE=5
+      # 종료 신호를 받으면 처리 중인 요청을 30초까지 마친다. terminationGracePeriodSeconds(40초)보다 짧게 둔다
+      - SERVER_SHUTDOWN=graceful
+      - SPRING_LIFECYCLE_TIMEOUT_PER_SHUTDOWN_PHASE=30s
