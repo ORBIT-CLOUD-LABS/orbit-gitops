@@ -7,3 +7,4 @@ namespace: ota
 resources:
   - deployment.yaml
   - service.yaml
+  - ingress.yaml

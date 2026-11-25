@@ -1,0 +1,21 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: orbit-server
+  annotations:
+    # TLS는 rp-core가 끝내고 rp-ota가 HTTP로 넘긴다. Traefik HTTP 입구(NodePort 30080)에만 붙인다
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: ota.orbit-labs.space
+      http:
+        paths:
+          # API만 내보낸다. /actuator(health, prometheus)는 인증 없이 열려 있어 클러스터 안에서만 쓴다
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: orbit-server
+                port:
+                  name: http
