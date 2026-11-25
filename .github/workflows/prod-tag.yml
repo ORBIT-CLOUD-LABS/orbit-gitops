@@ -1,0 +1,88 @@
+name: Prod tag
+
+# ota/base의 orbit-server 이미지가 바뀌면(릴리스든 revert든) 그 digest에 prod 태그를 옮긴다.
+# prod는 GHCR에서 운영 버전을 알아보기 위한 표시용이다. Argo CD와 매니페스트는 이 태그를 쓰지 않는다.
+on:
+  push:
+    branches: [ develop ]
+    paths:
+      - 'ota/base/kustomization.yaml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+# 한 번에 하나만 돌고, 대기 중인 실행은 가장 최근 것만 남는다.
+concurrency:
+  group: prod-tag
+  cancel-in-progress: false
+
+env:
+  IMAGE_NAME: ghcr.io/orbit-cloud-labs/orbit-server
+  TARGET: ota/base/kustomization.yaml
+
+jobs:
+  prod-tag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install PyYAML
+        run: python -m pip install --disable-pip-version-check PyYAML==6.0.3
+
+      - name: Read ota/base image
+        id: image
+        run: |
+          set -euo pipefail
+          # 늦게 시작한 실행이 더 새 커밋의 결과를 덮어쓰지 않게, 브랜치 최신 커밋 기준으로 읽는다.
+          git fetch --no-tags origin develop
+          git checkout --quiet FETCH_HEAD
+          image="$(python scripts/ci/ota_image.py "$TARGET")"
+          read -r version digest <<<"$image" || true
+          if [ -z "$version" ]; then
+            echo "$TARGET 이 없습니다. prod 태그를 옮기지 않습니다."
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        if: steps.image.outputs.digest != ''
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: steps.image.outputs.digest != ''
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Move prod tag
+        if: steps.image.outputs.digest != ''
+        env:
+          VERSION: ${{ steps.image.outputs.version }}
+          DIGEST: ${{ steps.image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          digest_of() { docker buildx imagetools inspect "$1" --format '{{json .Manifest}}' | jq -r '.digest'; }
+          test "$(digest_of "$IMAGE_NAME:$VERSION")" = "$DIGEST" \
+            || { echo "::error::$VERSION 태그의 digest가 orbit-gitops에 적힌 값과 다릅니다"; exit 1; }
+          if [ "$(digest_of "$IMAGE_NAME:prod" 2>/dev/null || true)" = "$DIGEST" ]; then
+            echo "prod가 이미 $VERSION 입니다."
+            exit 0
+          fi
+          docker buildx imagetools create --prefer-index=false --tag "$IMAGE_NAME:prod" "$IMAGE_NAME@$DIGEST"
+          test "$(digest_of "$IMAGE_NAME:prod")" = "$DIGEST" \
+            || { echo "::error::prod 태그의 digest가 원본과 다릅니다"; exit 1; }
+          echo "prod → \`$IMAGE_NAME:$VERSION@$DIGEST\`" >> "$GITHUB_STEP_SUMMARY"
