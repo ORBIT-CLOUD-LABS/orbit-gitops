@@ -3,11 +3,14 @@
 
 검사 항목
 - 모든 컨테이너(initContainers 포함)에 CPU·메모리 requests와 limits가 있다.
+- 모든 이미지가 `<이름>:<버전>@sha256:<digest>` 형태다.
+  `latest`·`prod`·`sha-` 태그, 태그 없는 이미지, digest 없는 이미지는 실패한다.
 
 사용법: check_manifests.py <렌더링된 YAML 파일>...  ('-'는 표준 입력)
 위반이 하나라도 있으면 목록을 출력하고 종료 코드 1로 끝난다.
 """
 
+import re
 import sys
 
 import yaml
@@ -25,6 +28,11 @@ POD_SPEC_PATHS = {
 
 CONTAINER_FIELDS = ("initContainers", "containers")
 REQUIRED_RESOURCES = ("cpu", "memory")
+
+# 버전 태그: 1.2.4, v1.2.4, 3.1.9-debian-12-r0 처럼 숫자로 시작하는 버전
+VERSION_TAG = re.compile(r"^v?[0-9]+(\.[0-9]+)*([-+][0-9A-Za-z.-]+)?$")
+DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
+MOVING_TAGS = ("latest", "prod")
 
 
 def pod_spec(doc):
@@ -57,6 +65,30 @@ def resource_errors(container):
     return errors
 
 
+def image_errors(image):
+    if not isinstance(image, str) or not image:
+        return ["image 없음"]
+    reference, at, digest = image.partition("@")
+    if not at:
+        return [f"image {image}: digest(@sha256:...) 없음"]
+    errors = []
+    if not DIGEST.match(digest):
+        errors.append(f"image {image}: digest 형식이 sha256:<64자리 16진수>가 아님")
+    # 레지스트리 포트(host:5000/...)와 구분하려고 마지막 '/' 뒤에서 태그를 찾는다.
+    last = reference.rsplit("/", 1)[-1]
+    if ":" not in last:
+        errors.append(f"image {image}: 버전 태그 없음")
+        return errors
+    tag = last.rsplit(":", 1)[1]
+    if tag in MOVING_TAGS:
+        errors.append(f"image {image}: 이동 태그 {tag} 사용 금지")
+    elif tag.startswith("sha-"):
+        errors.append(f"image {image}: sha- 태그 대신 릴리스 버전 사용")
+    elif not VERSION_TAG.match(tag):
+        errors.append(f"image {image}: 태그 {tag}가 버전 형식이 아님")
+    return errors
+
+
 def describe(doc):
     meta = doc.get("metadata") or {}
     namespace = meta.get("namespace")
@@ -75,7 +107,8 @@ def check_documents(docs):
             continue
         for field, container in iter_containers(spec):
             target = f"{describe(doc)} {field}[{container.get('name', '?')}]"
-            for error in resource_errors(container):
+            errors = resource_errors(container) + image_errors(container.get("image"))
+            for error in errors:
                 violations.append(f"{target}: {error}")
     return violations
 
