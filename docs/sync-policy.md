@@ -29,3 +29,5 @@ ESO Helm Application은 큰 CRD의 client-side apply annotation 한도를 피하
 ESO CRD·webhook·Store가 준비됐다고 판단하지 않는다. 첫 배포 결과는 ESO 준비 →
 ClusterSecretStore `Ready=True` → ExternalSecret `Ready=True`와 Secret 생성 순으로
 확인하고, CRD가 없어 실패한 동기화는 CRD 준비 후 재시도한다.
+
+운영 버전 표시용 GHCR `prod` 태그는 Sync에 쓰이지 않는다. 움직이는 방식은 [prod-tag.md](prod-tag.md).
