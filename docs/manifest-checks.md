@@ -53,17 +53,19 @@ tar.gz 값을 쓴다. Kubernetes 스키마 버전은 클러스터 k3s 버전을 
 
 ## Ruleset 설정 (GitHub 화면, 관리자)
 
-워크플로만으로는 머지를 막지 않는다. Argo CD가 읽는 브랜치(현재 `develop`)의 ruleset에서
-아래를 설정해야 검사 실패 PR의 머지가 막힌다.
+워크플로만으로는 머지를 막지 않는다. 이 저장소는 `main` 브랜치 하나만 쓰고 Argo CD가 `main`을 읽는다.
+환경(OTA Main·Sub 등)은 브랜치가 아니라 폴더로 나눈다. 모든 변경은 `main` 대상 PR로만 들어온다.
 
-Settings → Rules → Rulesets → 해당 브랜치 ruleset
+- 팀원의 매니페스트 변경: `task/*` → `main` PR
+- orbit-server 릴리스: 릴리스 워크플로(GitHub App `orbit-cloud-gitops-bot`)가 `release/orbit-server-<버전>` → `main` 배포 PR을 연다
 
-1. 기존 규칙은 그대로 둔다: 승인 1명, 대화 해결 필수, squash 머지.
-2. Require status checks to pass 켜기 → Add checks에서 `manifest-checks` 추가
-   (PR에서 워크플로가 한 번 돌아야 목록에 나온다).
-3. Bypass list에 GitHub App `orbit-cloud-gitops-bot` 추가.
-   orbit-server 릴리스 워크플로가 이 App으로 `ota/base` 이미지 줄을 직접 커밋하기 때문이다.
-   사람 계정은 우회 목록에 넣지 않는다.
+Settings → Rules → Rulesets → `main` ruleset
+
+1. Restrict deletions, Block force pushes
+2. Require a pull request before merging: 승인 1명, 대화 해결 필수, squash 머지
+3. Require status checks to pass 켜기 → Add checks에서 `manifest-checks` 추가
+   (PR에서 워크플로가 한 번 돌아야 목록에 나온다). 봇의 배포 PR도 이 검사를 거친다.
+4. Bypass list는 비워 둔다. 봇도 `main`에 직접 쓰지 않는다.
 
 ## 설정 뒤 확인
 
