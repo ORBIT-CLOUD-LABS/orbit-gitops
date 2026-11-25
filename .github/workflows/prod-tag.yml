@@ -1,10 +1,11 @@
 name: Prod tag
 
-# ota/base의 orbit-server 이미지가 바뀌면(릴리스든 revert든) 그 digest에 prod 태그를 옮긴다.
+# main(Argo CD가 읽는 운영 브랜치)의 ota/base orbit-server 이미지가 바뀌면(릴리스든 revert든) 그 digest에 prod 태그를 옮긴다.
+# 배포 PR이 열려 있기만 한 버전은 아직 운영이 아니므로 옮기지 않는다.
 # prod는 GHCR에서 운영 버전을 알아보기 위한 표시용이다. Argo CD와 매니페스트는 이 태그를 쓰지 않는다.
 on:
   push:
-    branches: [ develop ]
+    branches: [ main ]
     paths:
       - 'ota/base/kustomization.yaml'
   workflow_dispatch:
@@ -46,7 +47,7 @@ jobs:
         run: |
           set -euo pipefail
           # 늦게 시작한 실행이 더 새 커밋의 결과를 덮어쓰지 않게, 브랜치 최신 커밋 기준으로 읽는다.
-          git fetch --no-tags origin develop
+          git fetch --no-tags origin main
           git checkout --quiet FETCH_HEAD
           image="$(python scripts/ci/ota_image.py "$TARGET")"
           read -r version digest <<<"$image" || true
