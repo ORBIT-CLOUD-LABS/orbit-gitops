@@ -15,3 +15,14 @@ GHCR만 보고도 운영 버전을 알 수 있게 하는 표시용이다.
   다시 빌드하지 않으므로 digest가 바뀌지 않는다.
 - 이미 같은 digest면 아무것도 하지 않는다. 늦게 시작한 실행도 최신 커밋 기준으로 읽으므로 이전 버전으로 되돌리지 않는다.
 - 놓친 경우 Actions에서 `Prod tag`를 수동 실행(workflow_dispatch)하면 지금 `develop` 기준으로 맞춘다.
+
+## 권한 설정 (관리자, 한 번)
+
+이 저장소 워크플로의 `GITHUB_TOKEN`이 orbit-server 패키지에 태그를 쓰려면 패키지 설정에서 쓰기 권한을 준다.
+
+Org → Packages → `orbit-server` → Package settings → Manage Actions access → Add repository → `orbit-gitops`, Role: **Write**
+
+## 설정 뒤 확인
+
+1. orbit-server 릴리스 뒤 `docker buildx imagetools inspect ghcr.io/orbit-cloud-labs/orbit-server:prod`의 digest가 새 버전 태그와 같은지
+2. 그 릴리스 커밋을 이 저장소에서 revert → `prod`가 이전 버전 digest로 돌아가는지
