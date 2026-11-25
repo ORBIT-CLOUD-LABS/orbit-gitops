@@ -30,6 +30,12 @@ Ingress는 Host `ota.orbit-labs.space`의 `/api`만 받는다. `/actuator`(healt
 | probe | startup 최대 2분, liveness, readiness(DB 포함) | 서버의 health group 설정과 맞춤 |
 | 종료 | preStop 5초, graceful 30초, grace period 40초 | |
 | S3 | `orbit-firmware-origin-backup`, `ap-northeast-2`, 엔드포인트 비움 | S3 인터페이스 엔드포인트의 사설 DNS가 기본 주소를 받는다 |
+| CDN Edge | 서울·대전·부산 3개, 기본 서울, `https://cdn.orbit-labs.space/<seoul|daejeon|busan>` | `ota/base/cdn-edges.yaml`. 파일로 넣는다(`SPRING_CONFIG_IMPORT`) |
+
+Edge 주소는 이름 하나(`cdn.orbit-labs.space`)에 Edge마다 경로를 나눈다. rp-core·rp-cdn이 이 이름 하나만 받기 때문이다.
+서버는 URL 서명에 Edge 주소를 넣지 않고 Origin 경로(`/firmware/...`)만 넣어, 같은 서명이 모든 Edge에서 통한다(예비 URL).
+그래서 CDN 클러스터는 `/seoul` 같은 앞 경로를 떼고(StripPrefix) Edge nginx에 넘겨야 `secure_link` 검증이 맞는다.
+Edge를 바꾸면 CDN 쪽 Edge 선언도 함께 고친다.
 
 노드 역할 라벨로 노드를 고르지 않는다. 클러스터 VM 3대가 모두 server라 hostname 기준으로 고르게 나눈다.
 
@@ -59,7 +65,7 @@ ExternalSecret `orbit-server-secret`이 아래 키를 읽는다. 키가 하나�
 2. ESO와 ClusterSecretStore가 새 클러스터에 있고, Store의 namespace 조건에 `ota`가 들어 있음
 3. Vault에 위 표의 키
 4. `ota/base/kustomization.yaml`의 이미지 항목. orbit-server 첫 릴리스의 버전과 digest로 넣고, 그 뒤로는 릴리스가 고친다
-5. Edge 목록(`orbit.cdn.edges`, `default-edge-id`)과 서명 공개 키(`orbit.signing.public-keys`). 없으면 서버가 뜨지 않는다
+5. 서명 공개 키(`orbit.signing.public-keys`). 없으면 서버가 뜨지 않으므로 develop에 머지하기 전에 넣는다
 
 ## 확인
 
