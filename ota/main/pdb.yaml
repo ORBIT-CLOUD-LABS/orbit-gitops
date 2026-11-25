@@ -1,0 +1,10 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: orbit-server
+spec:
+  # 노드 점검(drain) 중에도 한 대는 요청을 받게 한다. HPA 최소 2대라 drain을 막지 않는다
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: orbit-server

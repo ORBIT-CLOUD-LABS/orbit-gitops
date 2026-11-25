@@ -1,0 +1,9 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# OTA Main 클러스터(ota-main). 평소 모든 요청을 받는다 (rp-ota upstream의 주 서버)
+namespace: ota
+
+resources:
+  - ../base
+  - pdb.yaml
