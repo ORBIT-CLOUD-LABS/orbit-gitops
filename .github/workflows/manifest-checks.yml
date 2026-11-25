@@ -1,0 +1,53 @@
+name: Manifest Checks
+
+# 필수 검사이므로 paths 필터를 쓰지 않는다. 검사가 생기지 않은 PR은 머지가 막힌다.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manifest-checks-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  KUSTOMIZE_VERSION: v5.6.0
+  KUSTOMIZE_SHA256: 54e4031ddc4e7fc59e408da29e7c646e8e57b8088c51b84b3df0864f47b5148f
+  KUBECONFORM_VERSION: v0.6.7
+  KUBECONFORM_SHA256: 95f14e87aa28c09d5941f11bd024c1d02fdc0303ccaa23f61cef67bc92619d73
+
+jobs:
+  manifest-checks:
+    name: manifest-checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install PyYAML
+        run: python -m pip install --disable-pip-version-check PyYAML==6.0.3
+
+      - name: Install kustomize and kubeconform
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          cd "$RUNNER_TEMP"
+          curl -fsSLo kustomize.tar.gz "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz"
+          echo "${KUSTOMIZE_SHA256}  kustomize.tar.gz" | sha256sum -c -
+          tar -xzf kustomize.tar.gz -C bin kustomize
+          curl -fsSLo kubeconform.tar.gz "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz"
+          echo "${KUBECONFORM_SHA256}  kubeconform.tar.gz" | sha256sum -c -
+          tar -xzf kubeconform.tar.gz -C bin kubeconform
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: Test check scripts
+        run: python -m unittest discover -s scripts/ci/tests -v
+
+      - name: Validate overlays
+        run: bash scripts/ci/validate-overlays.sh
