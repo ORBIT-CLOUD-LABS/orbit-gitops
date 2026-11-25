@@ -8,6 +8,7 @@ Phase2 k3s 클러스터의 배포 선언(Argo CD가 읽는 원본)을 작성·�
 | 상황 | 문서 |
 | --- | --- |
 | 요구사항·공통 값 확인 (항상) | [docs/requirements.md](docs/requirements.md) |
+| PR 검사 실패·검사 규칙 변경·ruleset | [docs/manifest-checks.md](docs/manifest-checks.md) |
 | Issue·Branch·커밋·PR·리뷰 | Org 공통 [CONTRIBUTING.md](https://github.com/ORBIT-CLOUD-LABS/.github/blob/main/CONTRIBUTING.md) |
 
 ## 핵심 규칙 요약
