@@ -40,8 +40,18 @@ Phase2 k3s 클러스터의 배포 선언(Argo CD가 읽는 원본)을 작성·�
 
 PR에는 실제로 실행한 검증만 적는다. 실행하지 않은 검증을 완료로 표시하지 않는다.
 
+모든 PR에서 GitHub Actions `manifest-checks`가 돈다. `ota/`·`cdn/` 아래 overlay(`base` 제외)마다
+`kustomize build` → `kubeconform -strict -kubernetes-version 1.35.9` → CPU·메모리 requests·limits와
+이미지 버전@digest 검사를 하고, 하나라도 실패하면 머지할 수 없다. 같은 검사를 로컬에서 돌릴 수 있다.
+
 ```bash
-kubectl apply --dry-run=client -f <파일 또는 디렉터리>      # manifest 형식
+bash scripts/ci/validate-overlays.sh                         # overlay 전체 (kustomize, kubeconform, python3·PyYAML 필요)
+python3 -m unittest discover -s scripts/ci/tests             # 검사 스크립트 테스트
+```
+
+overlay 밖 선언(`addons/`, `clusters/`)은 아직 워크플로가 검사하지 않으므로 직접 확인한다.
+
+```bash
 kubectl kustomize <디렉터리>                                 # kustomization이 있을 때
 helm template <chart> -f <values>                            # Helm을 쓸 때
 kubeconform -strict -kubernetes-version 1.35.9 <파일>        # 스키마 (k3s v1.35.9+k3s1)
