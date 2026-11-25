@@ -1,0 +1,28 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: orbit-server
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: orbit-server
+  # 기본은 OTA Main 기준. Sub는 overlay에서 minReplicas를 줄인다.
+  # 최대 4는 DB 연결 수(Pod당 5)와 클러스터 VM 자원(4 vCPU × 3대)으로 정한다
+  minReplicas: 2
+  maxReplicas: 4
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          # Phase1 측정값. request 500m 기준
+          averageUtilization: 70
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 30

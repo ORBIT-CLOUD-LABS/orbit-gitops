@@ -9,6 +9,7 @@ resources:
   - service.yaml
   - ingress.yaml
   - external-secret.yaml
+  - hpa.yaml
 
 # 설정이 바뀌면 이름 끝 hash가 바뀌어 Pod가 새로 뜬다.
 # 지난 hash의 ConfigMap은 Prune이 꺼져 있어 남는데, 그것 때문에 OutOfSync가 되지 않도록 IgnoreExtraneous를 붙인다
