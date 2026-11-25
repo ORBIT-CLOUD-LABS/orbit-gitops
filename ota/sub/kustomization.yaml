@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# OTA Sub 클러스터(ota-sub). Main이 응답하지 않을 때만 rp-ota가 넘긴다.
+# 평소 요청이 없어 1대로 두고, 넘어오면 HPA가 늘린다.
+# PDB는 두지 않는다. 1대일 때 minAvailable 1은 노드 drain을 막는다
+resources:
+  - ../base
+
+patches:
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: orbit-server
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 1
